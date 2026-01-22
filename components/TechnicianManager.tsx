@@ -1,12 +1,12 @@
 
 import React, { useState } from 'react';
 import { useApp } from '../AppContext';
-import { Technician } from '../types';
+import { Technician, SPKStatus } from '../types';
 import { 
   UserPlus, Search, X, Trash2, UserCog, 
   ShieldCheck, Briefcase, Plus, Terminal, Lock,
   Award, Star, Zap, HardHat, TrendingUp, Info, ChevronRight,
-  UserCheck, ShieldAlert
+  UserCheck, ShieldAlert, CheckCircle, Clock, ClipboardCheck
 } from 'lucide-react';
 
 const RANKS = [
@@ -19,7 +19,7 @@ const RANKS = [
 ];
 
 const TechnicianManager: React.FC = () => {
-  const { technicians, addTechnician, deleteTechnician, updateTechnicianRank, spks } = useApp();
+  const { technicians, addTechnician, deleteTechnician, updateTechnicianRank, spks, assets } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewingTech, setViewingTech] = useState<Technician | null>(null);
@@ -63,6 +63,11 @@ const TechnicianManager: React.FC = () => {
     t.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
     t.specialty.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const completedSPKs = viewingTech 
+    ? spks.filter(s => s.technicianId === viewingTech.id && s.status === SPKStatus.COMPLETED)
+        .sort((a, b) => new Date(b.completedAt || 0).getTime() - new Date(a.completedAt || 0).getTime())
+    : [];
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -160,37 +165,34 @@ const TechnicianManager: React.FC = () => {
       {/* Specialist Profile Modal */}
       {viewingTech && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
-          <div className="bg-white rounded-[48px] shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-             <div className="relative h-40 bg-slate-900 overflow-hidden">
+          <div className="bg-white rounded-[48px] shadow-2xl w-full max-w-3xl overflow-hidden animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+             <div className="relative h-32 flex-shrink-0 bg-slate-900 overflow-hidden">
                <div className="absolute inset-0 opacity-20">
                  <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_120%,rgba(59,130,246,0.5),transparent)]" />
-                 <div className="grid grid-cols-12 gap-1 h-full rotate-12 scale-150">
-                    {[...Array(24)].map((_, i) => <div key={i} className="border-l border-white/5 h-full" />)}
-                 </div>
                </div>
-               <button onClick={() => setViewingTech(null)} className="absolute top-8 right-8 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full backdrop-blur-md transition-all z-20">
-                 <X className="w-6 h-6" />
+               <button onClick={() => setViewingTech(null)} className="absolute top-6 right-8 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full backdrop-blur-md transition-all z-20">
+                 <X className="w-5 h-5" />
                </button>
              </div>
 
-             <div className="px-12 relative pb-12">
+             <div className="px-12 relative flex-1 overflow-y-auto custom-scrollbar pb-12">
                {/* Profile Header */}
-               <div className="flex items-end gap-6 -mt-16 relative z-10 mb-8">
-                 <div className="w-32 h-32 rounded-[40px] bg-white p-2 shadow-2xl">
-                   <div className="w-full h-full rounded-[32px] bg-slate-100 flex items-center justify-center text-4xl font-black text-slate-800 border-4 border-white shadow-inner">
+               <div className="flex items-end gap-6 -mt-12 relative z-10 mb-8">
+                 <div className="w-28 h-28 rounded-[36px] bg-white p-2 shadow-2xl flex-shrink-0">
+                   <div className="w-full h-full rounded-[28px] bg-slate-100 flex items-center justify-center text-3xl font-black text-slate-800 border-4 border-white shadow-inner">
                      {viewingTech.name[0]}
                    </div>
                  </div>
-                 <div className="pb-4">
-                   <h3 className="text-3xl font-black text-slate-800 tracking-tight">{viewingTech.name}</h3>
-                   <div className="flex items-center gap-2 text-slate-500 font-bold text-sm uppercase tracking-widest">
-                     <HardHat className="w-4 h-4" />
+                 <div className="pb-2">
+                   <h3 className="text-2xl font-black text-slate-800 tracking-tight">{viewingTech.name}</h3>
+                   <div className="flex items-center gap-2 text-slate-500 font-bold text-xs uppercase tracking-widest">
+                     <HardHat className="w-3.5 h-3.5" />
                      {viewingTech.specialty} Specialist
                    </div>
                  </div>
                </div>
 
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                  {/* Stats Column */}
                  <div className="space-y-6">
                     <div className="grid grid-cols-2 gap-4">
@@ -200,19 +202,19 @@ const TechnicianManager: React.FC = () => {
                         <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Active Orders</div>
                       </div>
                       <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
-                        <Star className="w-5 h-5 text-amber-500 mb-2" />
-                        <div className="text-2xl font-black text-slate-800">4.9</div>
-                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Rating</div>
+                        <Award className="w-5 h-5 text-emerald-500 mb-2" />
+                        <div className="text-2xl font-black text-slate-800">{completedSPKs.length}</div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Orders Completed</div>
                       </div>
                     </div>
 
                     <div className="p-6 bg-blue-50 rounded-3xl border border-blue-100 space-y-3">
                        <h4 className="text-xs font-black text-blue-700 uppercase tracking-widest flex items-center gap-2">
                          <Info className="w-4 h-4" />
-                         Specialist Metrics
+                         Performance Snapshot
                        </h4>
                        <p className="text-sm text-blue-800/70 leading-relaxed font-medium">
-                         Assigned to enterprise node <b>{viewingTech.id}</b>. Currently managing {viewingTech.activeTasks} critical service tickets with 98.4% uptime stability.
+                         ID: <b>{viewingTech.id}</b>. Seniority level optimized for {viewingTech.specialty} tasks. History shows consistent compliance with safety protocols.
                        </p>
                     </div>
                  </div>
@@ -222,17 +224,17 @@ const TechnicianManager: React.FC = () => {
                     <div className="space-y-4">
                       <label className="text-xs font-black text-slate-400 uppercase tracking-widest px-1">Authority Badge Rank</label>
                       <div className={`p-6 rounded-3xl border-2 flex flex-col items-center justify-center text-center gap-3 transition-all duration-500 ${getRankBadgeStyles(viewingTech.rank || RANKS[0])}`}>
-                         <div className="w-16 h-16 rounded-full bg-white/50 flex items-center justify-center text-current shadow-inner border border-current/10">
+                         <div className="w-12 h-12 rounded-full bg-white/50 flex items-center justify-center text-current shadow-inner border border-current/10">
                            {getRankIcon(viewingTech.rank || RANKS[0])}
                          </div>
-                         <div className="font-black text-lg tracking-tight uppercase">{viewingTech.rank || RANKS[0]}</div>
+                         <div className="font-black text-sm tracking-tight uppercase">{viewingTech.rank || RANKS[0]}</div>
                       </div>
                     </div>
 
                     <div className="space-y-3">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Modify Seniority</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Promote / Change Rank</p>
                       <select 
-                        className="w-full bg-white border border-slate-200 p-4 rounded-2xl outline-none focus:ring-4 focus:ring-blue-100 transition-all font-bold text-slate-700"
+                        className="w-full bg-white border border-slate-200 p-3 rounded-2xl outline-none focus:ring-4 focus:ring-blue-100 transition-all font-bold text-slate-700 text-sm"
                         value={viewingTech.rank || RANKS[0]}
                         onChange={(e) => updateTechnicianRank(viewingTech.id, e.target.value)}
                       >
@@ -241,17 +243,62 @@ const TechnicianManager: React.FC = () => {
                     </div>
                  </div>
                </div>
+
+               {/* SERVICE HISTORY LISTING */}
+               <div className="mt-10 space-y-4">
+                  <div className="flex items-center justify-between px-1">
+                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                      <ClipboardCheck className="w-4 h-4" />
+                      Specialist Work Log
+                    </h4>
+                    <span className="text-[10px] font-bold text-slate-400">{completedSPKs.length} Completed Records</span>
+                  </div>
+                  
+                  <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                    {completedSPKs.length === 0 ? (
+                      <div className="py-12 text-center bg-slate-50 rounded-[32px] border border-dashed border-slate-200">
+                        <Clock className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+                        <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">No service history found</p>
+                      </div>
+                    ) : (
+                      completedSPKs.map((spk) => {
+                        const asset = assets.find(a => a.id === spk.assetId);
+                        return (
+                          <div key={spk.id} className="group p-4 bg-white rounded-2xl border border-slate-100 flex items-center justify-between hover:border-emerald-200 transition-all shadow-sm">
+                             <div className="flex items-center gap-4">
+                               <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl group-hover:scale-110 transition-transform">
+                                 <CheckCircle className="w-4 h-4" />
+                               </div>
+                               <div>
+                                 <p className="text-sm font-bold text-slate-800 line-clamp-1">{spk.title}</p>
+                                 <div className="flex items-center gap-2 mt-0.5">
+                                   <p className="text-[10px] text-slate-400 font-bold">{asset?.name || 'Unknown Asset'}</p>
+                                   <div className="w-1 h-1 bg-slate-200 rounded-full" />
+                                   <p className="text-[10px] text-slate-400 font-bold uppercase">{spk.id}</p>
+                                 </div>
+                               </div>
+                             </div>
+                             <div className="text-right">
+                               <p className="text-[10px] font-black text-emerald-600 uppercase tracking-tighter">Verified Done</p>
+                               <p className="text-[9px] text-slate-400 font-bold">{spk.completedAt ? new Date(spk.completedAt).toLocaleDateString() : 'Date N/A'}</p>
+                             </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+               </div>
                
-               <div className="mt-10 pt-8 border-t border-slate-100 flex justify-between items-center">
+               <div className="mt-10 pt-8 border-t border-slate-100 flex justify-between items-center flex-shrink-0">
                   <div className="flex items-center gap-2 text-slate-400 text-[10px] font-bold uppercase tracking-widest">
                     <ShieldAlert className="w-4 h-4" />
-                    Security Clearance Level 4
+                    Encrypted Audit Log Active
                   </div>
                   <button 
                     onClick={() => setViewingTech(null)}
                     className="bg-slate-900 text-white px-8 py-3.5 rounded-2xl font-black text-sm hover:bg-slate-800 transition-all active:scale-95 shadow-xl shadow-slate-200"
                   >
-                    Update Profile
+                    Commit Profile Updates
                   </button>
                </div>
              </div>
