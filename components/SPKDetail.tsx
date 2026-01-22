@@ -43,10 +43,11 @@ const SPKDetail: React.FC<SPKDetailProps> = ({ spk, onBack, onReassign }) => {
     }
   };
 
+  // Fixed error by explicitly typing 'file' as File
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files) {
-      Array.from(files).forEach(file => {
+      Array.from(files).forEach((file: File) => {
         const reader = new FileReader();
         reader.onloadend = () => {
           setEditEvidence(prev => [...prev, reader.result as string]);

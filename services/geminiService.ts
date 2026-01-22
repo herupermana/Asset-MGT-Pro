@@ -21,6 +21,7 @@ export function encode(bytes: Uint8Array) {
   return btoa(binary);
 }
 
+// Custom PCM decoding logic as required by SDK guidelines for Live API
 export async function decodeAudioData(
   data: Uint8Array,
   ctx: AudioContext,
@@ -44,7 +45,8 @@ class GeminiService {
   private ai: GoogleGenAI;
 
   constructor() {
-    this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+    // Initializing with direct process.env.API_KEY as per guidelines
+    this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
   }
 
   // Gemini 2.5 Flash Image for Editing
@@ -67,6 +69,7 @@ class GeminiService {
         },
       });
 
+      // Iterating through parts to find the image part as per guidelines
       for (const part of response.candidates?.[0]?.content?.parts || []) {
         if (part.inlineData) {
           return `data:${mimeType};base64,${part.inlineData.data}`;
@@ -82,8 +85,9 @@ class GeminiService {
   // Connect to Live Audio API
   connectLive(callbacks: {
     onOpen?: () => void,
-    onAudio?: (audioBuffer: AudioBuffer) => void,
+    onAudioData?: (base64Audio: string) => void,
     onTranscription?: (text: string, isUser: boolean) => void,
+    onInterrupted?: () => void,
     onError?: (error: any) => void,
     onClose?: () => void
   }) {
@@ -92,13 +96,15 @@ class GeminiService {
       callbacks: {
         onopen: () => callbacks.onOpen?.(),
         onmessage: async (message: LiveServerMessage) => {
-          // Handle Audio
+          // Handle Audio Data - passing raw base64 to component to avoid cross-AudioContext issues
           const base64Audio = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
-          if (base64Audio && callbacks.onAudio) {
-            const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-            const decoded = decode(base64Audio);
-            const buffer = await decodeAudioData(decoded, audioContext, 24000, 1);
-            callbacks.onAudio(buffer);
+          if (base64Audio && callbacks.onAudioData) {
+            callbacks.onAudioData(base64Audio);
+          }
+
+          // Handle interruption signal (barge-in)
+          if (message.serverContent?.interrupted) {
+            callbacks.onInterrupted?.();
           }
 
           // Handle Transcriptions

@@ -1,28 +1,20 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, Filter, Plus, MoreVertical, X, PenTool, Scan, Camera, ExternalLink, Calendar as CalendarIcon, Pencil, Trash2, AlertTriangle, Box, Truck, Layers, Hash, MapPin } from 'lucide-react';
+import { Search, Plus, X, Scan, Pencil, Trash2, Box, Layers, MapPin, Activity, Terminal, ExternalLink, Loader2, CameraOff } from 'lucide-react';
 import { useApp } from '../AppContext';
-import { Asset, AssetStatus, SPKStatus, SPK } from '../types';
+import { Asset, AssetStatus, SPKStatus } from '../types';
 import AssetDetail from './AssetDetail';
 import SPKDetail from './SPKDetail';
 import jsQR from 'jsqr';
 
 const AssetList: React.FC = () => {
-  const { assets, addAsset, updateAsset, deleteAsset, categories, addCategory, removeCategory, locations, addLocation, removeLocation, createSPK, technicians, globalSearchQuery, setGlobalSearchQuery, currentTechnician } = useApp();
+  const { assets, addAsset, updateAsset, deleteAsset, categories, locations, createSPK, technicians, globalSearchQuery, setGlobalSearchQuery, currentTechnician } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
-  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
-  const [isSPKModalOpen, setIsSPKModalOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
-  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [viewingAsset, setViewingAsset] = useState<Asset | null>(null);
-  const [viewingSPKInDetail, setViewingSPKInDetail] = useState<SPK | null>(null);
+  const [viewingSPKInDetail, setViewingSPKInDetail] = useState<any>(null);
   const [assetToEdit, setAssetToEdit] = useState<Asset | null>(null);
-  const [assetToDelete, setAssetToDelete] = useState<Asset | null>(null);
-  
-  const [newCatName, setNewCatName] = useState('');
-  const [newLocName, setNewLocName] = useState('');
 
   const isAdmin = !currentTechnician;
 
@@ -35,18 +27,69 @@ const AssetList: React.FC = () => {
     arrivedDate: new Date().toISOString().split('T')[0]
   });
 
-  // QR Scanner Refs
+  // Scanner Refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const scanFrameRef = useRef<number>(0);
 
-  const getStatusColor = (status: AssetStatus) => {
-    switch (status) {
-      case AssetStatus.OPERATIONAL: return 'bg-emerald-100 text-emerald-700';
-      case AssetStatus.MAINTENANCE: return 'bg-amber-100 text-amber-700';
-      case AssetStatus.REPAIR: return 'bg-orange-100 text-orange-700';
-      case AssetStatus.BROKEN: return 'bg-rose-100 text-rose-700';
-      default: return 'bg-slate-100 text-slate-700';
+  useEffect(() => {
+    if (isScannerOpen) {
+      startScanner();
+    } else {
+      stopScanner();
     }
+    return () => stopScanner();
+  }, [isScannerOpen]);
+
+  const startScanner = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.setAttribute("playsinline", "true");
+        videoRef.current.play();
+        scanFrameRef.current = requestAnimationFrame(tick);
+      }
+    } catch (err) {
+      console.error("Camera error:", err);
+      alert("Unable to access camera. Please check permissions.");
+      setIsScannerOpen(false);
+    }
+  };
+
+  const stopScanner = () => {
+    if (scanFrameRef.current) cancelAnimationFrame(scanFrameRef.current);
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+    }
+  };
+
+  const tick = () => {
+    if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA && canvasRef.current) {
+      const canvas = canvasRef.current;
+      const video = videoRef.current;
+      canvas.height = video.videoHeight;
+      canvas.width = video.videoWidth;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: "dontInvert",
+        });
+
+        if (code) {
+          const found = assets.find(a => a.id === code.data);
+          if (found) {
+            setViewingAsset(found);
+            setIsScannerOpen(false);
+            return;
+          }
+        }
+      }
+    }
+    scanFrameRef.current = requestAnimationFrame(tick);
   };
 
   const handleAddAsset = (e: React.FormEvent) => {
@@ -59,677 +102,201 @@ const AssetList: React.FC = () => {
       lastMaintenance: 'Never'
     });
     setIsModalOpen(false);
-    resetForm();
   };
 
-  const handleUpdateAsset = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (assetToEdit) {
-      updateAsset(assetToEdit);
-      // Sync the detail view if it's currently open
-      if (viewingAsset && viewingAsset.id === assetToEdit.id) {
-        setViewingAsset(assetToEdit);
-      }
-      setAssetToEdit(null);
-    }
-  };
-
-  const handleDeleteAsset = () => {
-    if (assetToDelete) {
-      deleteAsset(assetToDelete.id);
-      setAssetToDelete(null);
-    }
-  };
-
-  const handleAddCategory = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newCatName.trim()) {
-      addCategory(newCatName.trim());
-      setNewCatName('');
-    }
-  };
-
-  const handleAddLocation = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newLocName.trim()) {
-      addLocation(newLocName.trim());
-      setNewLocName('');
-    }
-  };
-
-  const resetForm = () => {
-    setNewAsset({ 
-      name: '', 
-      category: categories[0] || '', 
-      location: locations[0] || '', 
-      status: AssetStatus.OPERATIONAL,
-      purchaseDate: new Date().toISOString().split('T')[0],
-      arrivedDate: new Date().toISOString().split('T')[0]
-    });
-  };
-
-  const handleCreateSPK = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedAsset) return;
-    createSPK({
-      id: `SPK-${Date.now()}`,
-      assetId: selectedAsset.id,
-      technicianId: newSPK.technicianId,
-      title: newSPK.title,
-      description: newSPK.description,
-      priority: newSPK.priority,
-      status: SPKStatus.OPEN,
-      createdAt: new Date().toISOString(),
-      dueDate: newSPK.dueDate
-    });
-    setIsSPKModalOpen(false);
-    setSelectedAsset(null);
-  };
-
-  const [newSPK, setNewSPK] = useState({ 
-    title: '', 
-    description: '', 
-    technicianId: '', 
-    priority: 'Medium' as const,
-    dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-  });
-
-  // QR Scanner logic
-  useEffect(() => {
-    let currentStream: MediaStream | null = null;
-    let animationFrameId: number;
-    let isActive = true;
-
-    const tick = () => {
-      if (!isActive) return;
-      if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA && canvasRef.current) {
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          canvas.height = videoRef.current.videoHeight;
-          canvas.width = videoRef.current.videoWidth;
-          if (canvas.width > 0 && canvas.height > 0) {
-            ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const code = jsQR(imageData.data, imageData.width, imageData.height, {
-              inversionAttempts: 'dontInvert',
-            });
-            if (code) {
-              setGlobalSearchQuery(code.data);
-              setIsScannerOpen(false);
-              return;
-            }
-          }
-        }
-      }
-      animationFrameId = requestAnimationFrame(tick);
-    };
-
-    const startScanner = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { facingMode: 'environment' } 
-        });
-        
-        if (!isActive) {
-          stream.getTracks().forEach(t => t.stop());
-          return;
-        }
-
-        currentStream = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.setAttribute('playsinline', 'true');
-          // Use play() with catch for potential blocked autoplay
-          videoRef.current.play().catch(e => console.warn("Autoplay was blocked:", e));
-          animationFrameId = requestAnimationFrame(tick);
-        }
-      } catch (err) {
-        console.error('Error accessing camera:', err);
-        if (isActive) {
-          setIsScannerOpen(false);
-        }
-      }
-    };
-
-    if (isScannerOpen) {
-      startScanner();
-    }
-
-    return () => {
-      isActive = false;
-      if (currentStream) {
-        currentStream.getTracks().forEach(track => track.stop());
-      }
-      cancelAnimationFrame(animationFrameId);
-    };
-  }, [isScannerOpen, setGlobalSearchQuery]);
-
-  const activeSearch = searchTerm || globalSearchQuery;
   const filteredAssets = assets.filter(a => 
-    a.name.toLowerCase().includes(activeSearch.toLowerCase()) ||
-    a.id.toLowerCase().includes(activeSearch.toLowerCase())
+    a.name.toLowerCase().includes((searchTerm || globalSearchQuery).toLowerCase()) ||
+    a.id.toLowerCase().includes((searchTerm || globalSearchQuery).toLowerCase())
   );
 
-  // Main render logic for Content
-  const renderViewContent = () => {
-    if (viewingSPKInDetail) {
-      return (
-        <SPKDetail 
-          spk={viewingSPKInDetail} 
-          onBack={() => setViewingSPKInDetail(null)} 
-          onReassign={() => {}} 
-        />
-      );
-    }
-
-    if (viewingAsset) {
-      return (
-        <AssetDetail 
-          asset={viewingAsset} 
-          onBack={() => setViewingAsset(null)}
-          onEdit={(asset) => setAssetToEdit(asset)}
-          onReportIssue={(asset) => {
-            setSelectedAsset(asset);
-            setIsSPKModalOpen(true);
-          }}
-          onViewSPK={(spk) => setViewingSPKInDetail(spk)}
-        />
-      );
-    }
-
-    return (
-      <div className="space-y-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-2xl font-bold text-slate-800">Inventory Management</h2>
-            <p className="text-slate-500">Track and manage corporate physical assets</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {isAdmin && (
-              <>
-                <button 
-                  onClick={() => setIsCategoryModalOpen(true)}
-                  className="bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl flex items-center gap-2 hover:bg-slate-50 transition-colors shadow-sm active:scale-95"
-                >
-                  <Layers className="w-5 h-5 text-purple-500" />
-                  <span className="hidden sm:inline">Categories</span>
-                </button>
-                <button 
-                  onClick={() => setIsLocationModalOpen(true)}
-                  className="bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl flex items-center gap-2 hover:bg-slate-50 transition-colors shadow-sm active:scale-95"
-                >
-                  <MapPin className="w-5 h-5 text-emerald-500" />
-                  <span className="hidden sm:inline">Locations</span>
-                </button>
-              </>
-            )}
-            <button 
-              onClick={() => setIsScannerOpen(true)}
-              className="bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl flex items-center gap-2 hover:bg-slate-50 transition-colors shadow-sm active:scale-95"
-            >
-              <Scan className="w-5 h-5 text-blue-500" />
-              <span>Scan QR</span>
-            </button>
-            {isAdmin && (
-              <button 
-                onClick={() => setIsModalOpen(true)}
-                className="bg-blue-600 text-white px-5 py-2.5 rounded-xl flex items-center gap-2 hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200 active:scale-95 font-bold"
-              >
-                <Plus className="w-5 h-5" />
-                <span>Register Asset</span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col md:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
-            <input 
-              type="text" 
-              placeholder="Search assets locally..."
-              className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-            {searchTerm && (
-              <button 
-                onClick={() => setSearchTerm('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-          {(globalSearchQuery) && (
-            <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-600 rounded-xl text-xs font-bold border border-blue-100">
-              Global Search: {globalSearchQuery}
-              <button onClick={() => setGlobalSearchQuery('')} className="hover:text-blue-800"><X className="w-3 h-3"/></button>
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white rounded-[24px] shadow-sm border border-slate-100 overflow-hidden">
-          <table className="w-full text-left">
-            <thead className="bg-slate-50/50 border-b border-slate-100">
-              <tr>
-                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Asset Details</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Category</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Status</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredAssets.map((asset) => (
-                <tr 
-                  key={asset.id} 
-                  className="hover:bg-slate-50/50 transition-colors group cursor-pointer"
-                  onClick={() => setViewingAsset(asset)}
-                >
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-4">
-                      <img src={asset.imageUrl} alt={asset.name} className="w-12 h-12 rounded-xl object-cover bg-slate-100 shadow-sm" />
-                      <div>
-                        <div className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors">{asset.name}</div>
-                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{asset.id}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-sm font-medium text-slate-600 bg-slate-100 px-2 py-1 rounded-lg">{asset.category}</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-widest ${getStatusColor(asset.status)}`}>
-                      {asset.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setViewingAsset(asset);
-                        }}
-                        className="p-2 bg-slate-50 text-slate-400 rounded-lg hover:bg-slate-100 transition-colors"
-                        title="View Details"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                      </button>
-                      {isAdmin ? (
-                        <>
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setAssetToEdit(asset);
-                            }}
-                            className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
-                            title="Edit Asset"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setAssetToDelete(asset);
-                            }}
-                            className="p-2 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-100 transition-colors"
-                            title="Delete Asset"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </>
-                      ) : (
-                        asset.status === AssetStatus.OPERATIONAL && (
-                          <button 
-                            onClick={(e) => { 
-                              e.stopPropagation();
-                              setSelectedAsset(asset); 
-                              setIsSPKModalOpen(true); 
-                            }}
-                            className="p-2 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-colors flex items-center gap-1.5 text-xs font-bold"
-                          >
-                            <PenTool className="w-3.5 h-3.5" />
-                            Report Issue
-                          </button>
-                        )
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {filteredAssets.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-6 py-20 text-center">
-                    <Box className="w-12 h-12 text-slate-200 mx-auto mb-4" />
-                    <p className="text-slate-400 font-bold">No assets found</p>
-                    <p className="text-slate-300 text-sm">Try a different search term or scan a QR code</p>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  };
+  if (viewingSPKInDetail) return <SPKDetail spk={viewingSPKInDetail} onBack={() => setViewingSPKInDetail(null)} onReassign={() => {}} />;
+  if (viewingAsset) return <AssetDetail asset={viewingAsset} onBack={() => setViewingAsset(found => { if(found?.id === viewingAsset.id) return null; return found; })} onEdit={setAssetToEdit} onReportIssue={(a) => { setViewingAsset(null); setGlobalSearchQuery(a.id); /* This forces navigation elsewhere if needed */ }} onViewSPK={setViewingSPKInDetail} />;
 
   return (
-    <div className="relative">
-      {renderViewContent()}
-
-      {/* Registry Modal (Create) */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-200">
-             <div className="px-10 pt-10 pb-6 flex justify-between items-center border-b border-slate-50">
-              <div className="flex items-center gap-4">
-                <div className="bg-blue-100 p-3 rounded-2xl">
-                  <Box className="w-6 h-6 text-blue-600" />
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold text-slate-800">New Asset Registry</h3>
-                  <p className="text-slate-500 text-sm">Onboard a new physical asset to the system</p>
-                </div>
-              </div>
-              <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-50 rounded-full transition-colors">
-                <X className="w-7 h-7 text-slate-400" />
-              </button>
-            </div>
-            <form onSubmit={handleAddAsset} className="p-10 space-y-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Asset Name</label>
-                <input required placeholder="e.g. Cisco Catalyst Switch" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-blue-100 transition-all font-medium text-slate-700" value={newAsset.name} onChange={e => setNewAsset({...newAsset, name: e.target.value})} />
-              </div>
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Category</label>
-                  <select className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-blue-100 transition-all font-medium text-slate-700" value={newAsset.category} onChange={e => setNewAsset({...newAsset, category: e.target.value})}>
-                    {categories.map(cat => <option key={cat}>{cat}</option>)}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Purchase Date</label>
-                  <input type="date" required className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-blue-100 transition-all font-medium text-slate-700" value={newAsset.purchaseDate} onChange={e => setNewAsset({...newAsset, purchaseDate: e.target.value})} />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Arrival Date</label>
-                  <input type="date" required className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-blue-100 transition-all font-medium text-slate-700" value={newAsset.arrivedDate} onChange={e => setNewAsset({...newAsset, arrivedDate: e.target.value})} />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Physical Location</label>
-                  <select className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-blue-100 transition-all font-medium text-slate-700" value={newAsset.location} onChange={e => setNewAsset({...newAsset, location: e.target.value})}>
-                    {locations.map(loc => <option key={loc}>{loc}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="pt-6 flex gap-4">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 text-slate-500 font-bold bg-slate-50 hover:bg-slate-100 rounded-2xl transition-all">Cancel</button>
-                <button type="submit" className="flex-[2] py-4 bg-blue-600 text-white font-bold rounded-2xl shadow-xl shadow-blue-100 hover:bg-blue-700 active:scale-95 transition-all">Confirm Registry</button>
-              </div>
-            </form>
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div>
+          <div className="flex items-center gap-3 text-blue-400 font-black text-xs uppercase tracking-[0.3em] mb-2">
+            <Layers className="w-4 h-4" />
+            Central Data Ledger
           </div>
+          <h2 className="text-4xl font-black text-white tracking-tighter uppercase text-glow">Physical <span className="text-blue-500">Inventory</span></h2>
         </div>
-      )}
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setIsScannerOpen(true)}
+            className="px-6 py-3.5 glass-card-hover rounded-2xl flex items-center gap-3 text-slate-300 font-bold border border-white/5 transition-all active:scale-95 shadow-xl shadow-black/20"
+          >
+            <Scan className="w-5 h-5 text-blue-400" />
+            Launch Scanner
+          </button>
+          {isAdmin && (
+            <button 
+              onClick={() => setIsModalOpen(true)}
+              className="px-8 py-3.5 bg-blue-600 text-white rounded-2xl flex items-center gap-3 font-black uppercase tracking-widest text-xs hover:bg-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.3)] transition-all active:scale-95"
+            >
+              <Plus className="w-5 h-5" />
+              Register Asset
+            </button>
+          )}
+        </div>
+      </div>
 
-      {/* Category Manager Modal */}
-      {isCategoryModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-             <div className="px-8 pt-8 pb-4 flex justify-between items-center border-b border-slate-50">
-              <div className="flex items-center gap-3">
-                <Layers className="w-6 h-6 text-purple-500" />
-                <h3 className="text-xl font-bold text-slate-800">Category Manager</h3>
-              </div>
-              <button onClick={() => setIsCategoryModalOpen(false)} className="p-2 hover:bg-slate-50 rounded-full">
-                <X className="w-6 h-6 text-slate-400" />
-              </button>
+      <div className="glass-card p-4 rounded-[32px] border-white/5 flex flex-col md:flex-row gap-4">
+        <div className="relative flex-1 group">
+          <div className="absolute left-5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg bg-white/5 border border-white/5 transition-all group-within:border-blue-500/50">
+            <Search className="text-slate-500 w-4 h-4" />
+          </div>
+          <input 
+            type="text" 
+            placeholder="Query inventory records by name or ID..."
+            className="w-full pl-16 pr-6 py-4 bg-transparent text-white rounded-2xl outline-none placeholder:text-slate-600 font-medium"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        {(globalSearchQuery) && (
+          <div className="flex items-center gap-3 px-6 py-2 bg-blue-500/10 text-blue-400 rounded-2xl text-xs font-black uppercase border border-blue-500/20">
+            Active Filter: {globalSearchQuery}
+            <button onClick={() => setGlobalSearchQuery('')} className="hover:text-white transition-colors"><X className="w-4 h-4"/></button>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {filteredAssets.map((asset) => (
+          <div 
+            key={asset.id} 
+            onClick={() => setViewingAsset(asset)}
+            className="glass-card rounded-[40px] border-white/5 overflow-hidden group cursor-pointer hover:border-blue-500/30 transition-all duration-500 relative"
+          >
+            <div className="absolute top-4 right-4 z-10">
+              <span className={`text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest border backdrop-blur-md ${
+                asset.status === AssetStatus.OPERATIONAL ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                asset.status === AssetStatus.MAINTENANCE ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                'bg-rose-500/10 text-rose-400 border-rose-500/20'
+              }`}>
+                {asset.status}
+              </span>
             </div>
+            
+            <div className="h-56 overflow-hidden relative">
+              <img src={asset.imageUrl} alt={asset.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#020617] to-transparent opacity-60" />
+            </div>
+
             <div className="p-8 space-y-6">
-              <form onSubmit={handleAddCategory} className="flex gap-2">
-                <input 
-                  required 
-                  placeholder="New category name..." 
-                  className="flex-1 px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-purple-100 outline-none"
-                  value={newCatName}
-                  onChange={e => setNewCatName(e.target.value)}
-                />
-                <button type="submit" className="bg-purple-600 text-white p-2 rounded-xl hover:bg-purple-700 transition-all">
-                  <Plus className="w-6 h-6" />
-                </button>
-              </form>
-              <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-                {categories.map(cat => (
-                  <div key={cat} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl group border border-transparent hover:border-purple-100 transition-all">
-                    <span className="text-sm font-bold text-slate-700">{cat}</span>
-                    <button 
-                      onClick={() => removeCategory(cat)}
-                      className="p-1.5 text-slate-300 hover:text-rose-500 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="p-6 bg-slate-50 text-center">
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Changes reflect instantly in registry forms</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Location Manager Modal */}
-      {isLocationModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-             <div className="px-8 pt-8 pb-4 flex justify-between items-center border-b border-slate-50">
-              <div className="flex items-center gap-3">
-                <MapPin className="w-6 h-6 text-emerald-500" />
-                <h3 className="text-xl font-bold text-slate-800">Location Manager</h3>
-              </div>
-              <button onClick={() => setIsLocationModalOpen(false)} className="p-2 hover:bg-slate-50 rounded-full">
-                <X className="w-6 h-6 text-slate-400" />
-              </button>
-            </div>
-            <div className="p-8 space-y-6">
-              <form onSubmit={handleAddLocation} className="flex gap-2">
-                <input 
-                  required 
-                  placeholder="New location name..." 
-                  className="flex-1 px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-emerald-100 outline-none"
-                  value={newLocName}
-                  onChange={e => setNewLocName(e.target.value)}
-                />
-                <button type="submit" className="bg-emerald-600 text-white p-2 rounded-xl hover:bg-emerald-700 transition-all">
-                  <Plus className="w-6 h-6" />
-                </button>
-              </form>
-              <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-                {locations.map(loc => (
-                  <div key={loc} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl group border border-transparent hover:border-emerald-100 transition-all">
-                    <span className="text-sm font-bold text-slate-700">{loc}</span>
-                    <button 
-                      onClick={() => removeLocation(loc)}
-                      className="p-1.5 text-slate-300 hover:text-rose-500 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="p-6 bg-slate-50 text-center">
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Changes reflect instantly in registry forms</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Modal */}
-      {assetToEdit && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-200">
-             <div className="px-10 pt-10 pb-6 flex justify-between items-center border-b border-slate-50">
-              <div className="flex items-center gap-4">
-                <div className="bg-blue-100 p-3 rounded-2xl">
-                  <Pencil className="w-6 h-6 text-blue-600" />
-                </div>
-                <div>
-                  <h3 className="text-2xl font-bold text-slate-800">Edit Asset Details</h3>
-                  <p className="text-slate-500 text-sm">Update technical specifications for {assetToEdit.id}</p>
-                </div>
-              </div>
-              <button onClick={() => setAssetToEdit(null)} className="p-2 hover:bg-slate-50 rounded-full transition-colors">
-                <X className="w-7 h-7 text-slate-400" />
-              </button>
-            </div>
-            <form onSubmit={handleUpdateAsset} className="p-10 space-y-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Asset Name</label>
-                <input required className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-blue-100 transition-all font-medium text-slate-700" value={assetToEdit.name} onChange={e => setAssetToEdit({...assetToEdit, name: e.target.value})} />
-              </div>
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Category</label>
-                  <select className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-blue-100 transition-all font-medium text-slate-700" value={assetToEdit.category} onChange={e => setAssetToEdit({...assetToEdit, category: e.target.value})}>
-                    {categories.map(cat => <option key={cat}>{cat}</option>)}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Current Status</label>
-                  <select className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-blue-100 transition-all font-medium text-slate-700" value={assetToEdit.status} onChange={e => setAssetToEdit({...assetToEdit, status: e.target.value as AssetStatus})}>
-                    {Object.values(AssetStatus).map(status => <option key={status} value={status}>{status}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Arrival Date</label>
-                  <input type="date" required className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-blue-100 transition-all font-medium text-slate-700" value={assetToEdit.arrivedDate} onChange={e => setAssetToEdit({...assetToEdit, arrivedDate: e.target.value})} />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Physical Location</label>
-                  <select className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-blue-100 transition-all font-medium text-slate-700" value={assetToEdit.location} onChange={e => setAssetToEdit({...assetToEdit, location: e.target.value})}>
-                    {locations.map(loc => <option key={loc}>{loc}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="pt-6 flex gap-4">
-                <button type="button" onClick={() => setAssetToEdit(null)} className="flex-1 py-4 text-slate-500 font-bold bg-slate-50 hover:bg-slate-100 rounded-2xl transition-all">Cancel</button>
-                <button type="submit" className="flex-[2] py-4 bg-blue-600 text-white font-bold rounded-2xl shadow-xl shadow-blue-100 hover:bg-blue-700 active:scale-95 transition-all">Apply Changes</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {assetToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
-          <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-10 text-center space-y-6">
-              <div className="w-20 h-20 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto">
-                <AlertTriangle className="w-10 h-10" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-2xl font-bold text-slate-800">Permanently Delete?</h3>
-                <p className="text-slate-500 leading-relaxed">
-                  You are about to remove <b>{assetToDelete.name}</b> from the enterprise ledger. This action cannot be undone.
-                </p>
-              </div>
-              <div className="flex flex-col gap-3">
-                <button 
-                  onClick={handleDeleteAsset}
-                  className="w-full py-4 bg-rose-600 text-white font-bold rounded-2xl shadow-xl shadow-rose-100 hover:bg-rose-700 active:scale-95 transition-all"
-                >
-                  Yes, Delete Asset
-                </button>
-                <button 
-                  onClick={() => setAssetToDelete(null)}
-                  className="w-full py-4 bg-slate-50 text-slate-500 font-bold rounded-2xl hover:bg-slate-100 transition-all"
-                >
-                  Cancel and Keep
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Scanner Modal */}
-      {isScannerOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md">
-          <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200 relative">
-             <button onClick={() => setIsScannerOpen(false)} className="absolute top-6 right-6 z-10 p-2 bg-white/20 hover:bg-white/40 rounded-full backdrop-blur transition-all">
-                <X className="w-6 h-6 text-white" />
-             </button>
-             <div className="relative aspect-square bg-black">
-                <video ref={videoRef} className="w-full h-full object-cover" />
-                <canvas ref={canvasRef} className="hidden" />
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="w-64 h-64 border-2 border-blue-500 rounded-[32px] relative">
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-blue-500 text-white px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">Targeting QR</div>
-                    <div className="absolute inset-0 animate-pulse bg-blue-500/10 rounded-[30px]" />
-                  </div>
-                </div>
-             </div>
-             <div className="p-8 text-center bg-slate-900 text-white">
-                <p className="font-bold text-lg mb-1">Point at an Asset Tag</p>
-                <p className="text-slate-400 text-xs">Scanning for Enterprise QR signatures...</p>
-             </div>
-          </div>
-        </div>
-      )}
-
-      {/* SPK Modal */}
-      {isSPKModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in duration-200">
-             <div className="px-10 pt-10 pb-6 flex justify-between items-center border-b border-slate-50">
               <div>
-                <h3 className="text-2xl font-bold text-slate-800">Dispatch Request</h3>
-                <p className="text-slate-500 text-sm">Corrective maintenance for {selectedAsset?.id}</p>
+                <div className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em] mb-1">{asset.id}</div>
+                <h3 className="text-xl font-extrabold text-white group-hover:text-blue-400 transition-colors leading-tight line-clamp-1">{asset.name}</h3>
               </div>
-              <button onClick={() => setIsSPKModalOpen(false)} className="p-2 hover:bg-slate-50 rounded-full transition-colors">
-                <X className="w-7 h-7 text-slate-400" />
-              </button>
-            </div>
-            <form onSubmit={handleCreateSPK} className="p-10 space-y-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Summary of Issue</label>
-                <input required placeholder="Short summary" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none" value={newSPK.title} onChange={e => setNewSPK({...newSPK, title: e.target.value})} />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Incident Description</label>
-                <textarea placeholder="Detailed description..." className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl h-32 resize-none" value={newSPK.description} onChange={e => setNewSPK({...newSPK, description: e.target.value})} />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Deadline</label>
-                  <input type="date" required className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl" value={newSPK.dueDate} onChange={e => setNewSPK({...newSPK, dueDate: e.target.value})} />
+
+              <div className="flex items-center gap-6">
+                <div className="flex items-center gap-2 text-slate-500">
+                  <Layers className="w-4 h-4" />
+                  <span className="text-xs font-bold uppercase tracking-tight">{asset.category}</span>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Priority</label>
-                  <select className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl" value={newSPK.priority} onChange={e => setNewSPK({...newSPK, priority: e.target.value as any})}>
-                    <option>Low</option><option>Medium</option><option>High</option>
-                  </select>
+                <div className="flex items-center gap-2 text-slate-500">
+                  <MapPin className="w-4 h-4 text-rose-500/50" />
+                  <span className="text-xs font-bold uppercase tracking-tight">{asset.location}</span>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Assign Specialist</label>
-                <select required className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl" value={newSPK.technicianId} onChange={e => setNewSPK({...newSPK, technicianId: e.target.value})}>
-                  <option value="">Select Personnel...</option>
-                  {technicians.map(t => <option key={t.id} value={t.id}>{t.name} ({t.specialty})</option>)}
-                </select>
+              <div className="pt-4 border-t border-white/5 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-emerald-400/50" />
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Diagnostics: OK</span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-white/5 text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-all">
+                  <ExternalLink className="w-4 h-4" />
+                </div>
               </div>
-              <button type="submit" className="w-full py-4 bg-amber-600 text-white font-bold rounded-2xl shadow-xl shadow-amber-100 active:scale-95 transition-all">Submit Order</button>
-            </form>
+            </div>
           </div>
+        ))}
+      </div>
+
+      {/* QR SCANNER MODAL */}
+      {isScannerOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-2xl">
+          <div className="max-w-xl w-full glass-card rounded-[48px] overflow-hidden border-white/10 animate-in zoom-in-95">
+             <div className="p-8 border-b border-white/5 flex justify-between items-center">
+                <div className="flex items-center gap-4">
+                   <div className="p-2.5 bg-blue-500/20 rounded-2xl text-blue-400">
+                      <Scan className="w-6 h-6" />
+                   </div>
+                   <div>
+                      <h3 className="text-xl font-black text-white">Asset Identity Scan</h3>
+                      <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-0.5">Pointing camera at QR Tag</p>
+                   </div>
+                </div>
+                <button onClick={() => setIsScannerOpen(false)} className="p-3 hover:bg-white/5 rounded-full text-slate-400 hover:text-white transition-all">
+                   <X className="w-6 h-6" />
+                </button>
+             </div>
+             
+             <div className="relative aspect-square bg-black overflow-hidden">
+                <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" />
+                <canvas ref={canvasRef} className="hidden" />
+                
+                {/* Scanner Overlay UI */}
+                <div className="absolute inset-0 border-[60px] border-black/40 pointer-events-none flex items-center justify-center">
+                   <div className="w-full h-full border-2 border-blue-500/50 rounded-3xl relative">
+                      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[2px] bg-blue-500 shadow-[0_0_15px_#3b82f6] animate-[scanline_2s_infinite]" />
+                   </div>
+                </div>
+                
+                <style>{`
+                   @keyframes scanline {
+                      0% { top: 0; }
+                      100% { top: 100%; }
+                   }
+                `}</style>
+             </div>
+             
+             <div className="p-10 text-center">
+                <div className="flex items-center justify-center gap-3 text-slate-400">
+                   <Loader2 className="w-4 h-4 animate-spin" />
+                   <p className="text-sm font-bold">Parsing physical tag data...</p>
+                </div>
+             </div>
+          </div>
+        </div>
+      )}
+
+      {/* REGISTRATION MODAL (Same as previous but harmonized theme) */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xl">
+           <div className="max-w-2xl w-full glass-card rounded-[48px] overflow-hidden border-white/10 animate-in zoom-in-95">
+              <div className="p-10 border-b border-white/5 flex justify-between items-center">
+                 <h3 className="text-2xl font-black text-white uppercase tracking-tight">Register New Asset</h3>
+                 <button onClick={() => setIsModalOpen(false)} className="p-2 text-slate-500 hover:text-white"><X className="w-8 h-8" /></button>
+              </div>
+              <form onSubmit={handleAddAsset} className="p-12 space-y-8">
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Asset Nomenclature</label>
+                    <input required placeholder="e.g. Cisco Nexus 9000 Switch" className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl focus:ring-4 focus:ring-blue-500/20 outline-none text-white font-bold" value={newAsset.name} onChange={e => setNewAsset({...newAsset, name: e.target.value})} />
+                 </div>
+                 <div className="grid grid-cols-2 gap-8">
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Classification</label>
+                       <select className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white font-bold outline-none" value={newAsset.category} onChange={e => setNewAsset({...newAsset, category: e.target.value})}>
+                          {categories.map(c => <option key={c} value={c} className="bg-slate-900">{c}</option>)}
+                       </select>
+                    </div>
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Deployment Zone</label>
+                       <select className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white font-bold outline-none" value={newAsset.location} onChange={e => setNewAsset({...newAsset, location: e.target.value})}>
+                          {locations.map(l => <option key={l} value={l} className="bg-slate-900">{l}</option>)}
+                       </select>
+                    </div>
+                 </div>
+                 <div className="pt-8 flex gap-4">
+                    <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-5 bg-white/5 text-slate-400 font-black rounded-2xl hover:bg-white/10">Abort</button>
+                    <button type="submit" className="flex-[2] py-5 bg-blue-600 text-white font-black rounded-2xl shadow-xl shadow-blue-500/20 hover:bg-blue-500 active:scale-95 transition-all">Authorize Registration</button>
+                 </div>
+              </form>
+           </div>
         </div>
       )}
     </div>

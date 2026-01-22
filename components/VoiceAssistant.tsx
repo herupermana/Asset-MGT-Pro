@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Mic, MicOff, Volume2, History, Send, Loader2 } from 'lucide-react';
-import { gemini, encode } from '../services/geminiService';
+import { gemini, encode, decode, decodeAudioData } from '../services/geminiService';
 import { ConversationMessage } from '../types';
 
 const VoiceAssistant: React.FC = () => {
@@ -14,6 +14,7 @@ const VoiceAssistant: React.FC = () => {
   const sessionPromiseRef = useRef<Promise<any> | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const nextStartTimeRef = useRef<number>(0);
+  const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isComponentActive = useRef(true);
 
@@ -51,6 +52,10 @@ const VoiceAssistant: React.FC = () => {
     outputAudioContextRef.current?.close();
     outputAudioContextRef.current = null;
     sessionPromiseRef.current = null;
+    // Clear playback sources
+    sourcesRef.current.forEach(s => s.stop());
+    sourcesRef.current.clear();
+    nextStartTimeRef.current = 0;
   };
 
   const startSession = async () => {
@@ -77,10 +82,21 @@ const VoiceAssistant: React.FC = () => {
           setStatus('listening');
           startStreamingInput(inputCtx, stream, sessionPromise);
         },
-        onAudio: (buffer) => {
-          if (!isComponentActive.current) return;
-          playAudioBuffer(buffer, outputCtx);
+        // Decoding audio locally to avoid cross-AudioContext errors
+        onAudioData: async (base64) => {
+          if (!isComponentActive.current || !outputAudioContextRef.current) return;
+          const bytes = decode(base64);
+          const buffer = await decodeAudioData(bytes, outputAudioContextRef.current, 24000, 1);
+          playAudioBuffer(buffer, outputAudioContextRef.current);
           setStatus('responding');
+        },
+        onInterrupted: () => {
+          // Properly handling barge-in/interruptions as per SDK guidelines
+          sourcesRef.current.forEach(s => {
+            try { s.stop(); } catch(e) {}
+          });
+          sourcesRef.current.clear();
+          nextStartTimeRef.current = 0;
         },
         onTranscription: (text, isUser) => {
           if (!isComponentActive.current) return;
@@ -99,6 +115,7 @@ const VoiceAssistant: React.FC = () => {
           console.error("Live Error:", err);
           stopSession();
         },
+        // Fixed: Use onClose instead of onclose to match the connectLive parameter definition
         onClose: () => {
           stopSession();
         }
@@ -126,12 +143,11 @@ const VoiceAssistant: React.FC = () => {
       }
       
       const pcmData = encode(new Uint8Array(int16.buffer));
+      // Solely relying on sessionPromise resolves without other condition checks inside then
       sessionPromise.then((session) => {
-        if (isActive) {
-          session.sendRealtimeInput({
-            media: { data: pcmData, mimeType: 'audio/pcm;rate=16000' }
-          });
-        }
+        session.sendRealtimeInput({
+          media: { data: pcmData, mimeType: 'audio/pcm;rate=16000' }
+        });
       });
     };
 
@@ -145,9 +161,15 @@ const VoiceAssistant: React.FC = () => {
     source.buffer = buffer;
     source.connect(ctx.destination);
     
+    // Using persistent nextStartTime for gapless playback
     const startTime = Math.max(nextStartTimeRef.current, ctx.currentTime);
     source.start(startTime);
     nextStartTimeRef.current = startTime + buffer.duration;
+    
+    sourcesRef.current.add(source);
+    source.onended = () => {
+      sourcesRef.current.delete(source);
+    };
   };
 
   return (

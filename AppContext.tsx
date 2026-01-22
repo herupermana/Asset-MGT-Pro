@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { Asset, SPK, Technician, AssetStatus, SPKStatus } from './types';
 import { MOCK_ASSETS, MOCK_SPKS, MOCK_TECHNICIANS, DEFAULT_CATEGORIES, DEFAULT_LOCATIONS } from './constants';
 
@@ -31,19 +31,54 @@ interface AppContextType {
   addTechnician: (tech: Technician) => void;
   deleteTechnician: (id: string) => void;
   updateTechnicianRank: (id: string, rank: string) => void;
+  bulkRestoreData: (data: { assets: Asset[], spks: SPK[], technicians: Technician[], categories: string[], locations: string[] }) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [assets, setAssets] = useState<Asset[]>(MOCK_ASSETS);
-  const [spks, setSpks] = useState<SPK[]>(MOCK_SPKS);
-  const [technicians, setTechnicians] = useState<Technician[]>(MOCK_TECHNICIANS);
-  const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
-  const [locations, setLocations] = useState<string[]>(DEFAULT_LOCATIONS);
+  // Initialize state from LocalStorage or Defaults
+  const [assets, setAssets] = useState<Asset[]>(() => {
+    const saved = localStorage.getItem('ap_assets');
+    return saved ? JSON.parse(saved) : MOCK_ASSETS;
+  });
+  const [spks, setSpks] = useState<SPK[]>(() => {
+    const saved = localStorage.getItem('ap_spks');
+    return saved ? JSON.parse(saved) : MOCK_SPKS;
+  });
+  const [technicians, setTechnicians] = useState<Technician[]>(() => {
+    const saved = localStorage.getItem('ap_technicians');
+    return saved ? JSON.parse(saved) : MOCK_TECHNICIANS;
+  });
+  const [categories, setCategories] = useState<string[]>(() => {
+    const saved = localStorage.getItem('ap_categories');
+    return saved ? JSON.parse(saved) : DEFAULT_CATEGORIES;
+  });
+  const [locations, setLocations] = useState<string[]>(() => {
+    const saved = localStorage.getItem('ap_locations');
+    return saved ? JSON.parse(saved) : DEFAULT_LOCATIONS;
+  });
+
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
-  const [currentTechnician, setCurrentTechnician] = useState<Technician | null>(null);
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
+  const [currentTechnician, setCurrentTechnician] = useState<Technician | null>(() => {
+    const saved = localStorage.getItem('ap_current_tech');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(() => {
+    return localStorage.getItem('ap_admin_auth') === 'true';
+  });
+
+  // Persistence Sync
+  useEffect(() => { localStorage.setItem('ap_assets', JSON.stringify(assets)); }, [assets]);
+  useEffect(() => { localStorage.setItem('ap_spks', JSON.stringify(spks)); }, [spks]);
+  useEffect(() => { localStorage.setItem('ap_technicians', JSON.stringify(technicians)); }, [technicians]);
+  useEffect(() => { localStorage.setItem('ap_categories', JSON.stringify(categories)); }, [categories]);
+  useEffect(() => { localStorage.setItem('ap_locations', JSON.stringify(locations)); }, [locations]);
+  useEffect(() => { 
+    if (currentTechnician) localStorage.setItem('ap_current_tech', JSON.stringify(currentTechnician));
+    else localStorage.removeItem('ap_current_tech');
+  }, [currentTechnician]);
+  useEffect(() => { localStorage.setItem('ap_admin_auth', isAdminLoggedIn.toString()); }, [isAdminLoggedIn]);
 
   const addAsset = (asset: Asset) => setAssets(prev => [asset, ...prev]);
 
@@ -53,6 +88,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const deleteAsset = (id: string) => {
     setAssets(prev => prev.filter(a => a.id !== id));
+    // Also cleanup SPKs for this asset
+    setSpks(prev => prev.filter(s => s.assetId !== id));
   };
 
   const addCategory = (category: string) => {
@@ -99,6 +136,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const updateSPKStatus = (id: string, status: SPKStatus, note?: string, evidence?: string[]) => {
     setSpks(prev => prev.map(s => {
       if (s.id === id) {
+        // If transitioning TO completed, decrement tech workload and restore asset status
         if (status === SPKStatus.COMPLETED && s.status !== SPKStatus.COMPLETED) {
            setTechnicians(tPrev => tPrev.map(t => 
              t.id === s.technicianId ? { ...t, activeTasks: Math.max(0, t.activeTasks - 1) } : t
@@ -119,6 +157,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const updateAssetStatus = (id: string, status: AssetStatus) => {
     setAssets(prev => prev.map(a => a.id === id ? { ...a, status } : a));
+  };
+
+  const bulkRestoreData = (data: { assets: Asset[], spks: SPK[], technicians: Technician[], categories: string[], locations: string[] }) => {
+    if (data.assets) setAssets(data.assets);
+    if (data.spks) setSpks(data.spks);
+    if (data.technicians) setTechnicians(data.technicians);
+    if (data.categories) setCategories(data.categories);
+    if (data.locations) setLocations(data.locations);
   };
 
   const loginTechnician = async (id: string, password: string): Promise<boolean> => {
@@ -191,7 +237,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       logoutAdmin,
       addTechnician,
       deleteTechnician,
-      updateTechnicianRank
+      updateTechnicianRank,
+      bulkRestoreData
     }}>
       {children}
     </AppContext.Provider>

@@ -9,9 +9,10 @@ import VoiceAssistant from './components/VoiceAssistant';
 import TechnicianWorkspace from './components/TechnicianWorkspace';
 import TechnicianManager from './components/TechnicianManager';
 import AdminLogin from './components/AdminLogin';
-import ReportCenter from './components/ReportCenter'; // Added Import
+import ReportCenter from './components/ReportCenter';
+import SettingsView from './components/Settings';
 import { User, Bell, Search, X, UserCircle, LayoutDashboard, HardHat, ArrowRight, ShieldCheck, Box, LogOut, ChevronDown } from 'lucide-react';
-import { useApp } from './AppContext';
+import { useApp } from '../AppContext';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -165,7 +166,8 @@ const App: React.FC = () => {
       case 'assets': return <AssetList />;
       case 'spk': return <SPKManager />;
       case 'technicians': return <TechnicianManager />;
-      case 'reports': return <ReportCenter />; // Added Case
+      case 'reports': return <ReportCenter />;
+      case 'settings': return <SettingsView />;
       case 'image-ai': return <ImageAIRefiner />;
       case 'voice-ai': return <VoiceAssistant />;
       default: return <Dashboard />;
@@ -187,12 +189,7 @@ const App: React.FC = () => {
                 placeholder="Search inventory..." 
                 className="bg-transparent focus:outline-none text-slate-600 w-full py-2"
                 value={globalSearchQuery}
-                onChange={(e) => {
-                  setGlobalSearchQuery(e.target.value);
-                  if (activeTab !== 'assets' && activeTab !== 'spk') {
-                    setActiveTab('assets');
-                  }
-                }}
+                onChange={(e) => setGlobalSearchQuery(e.target.value)}
               />
               {globalSearchQuery && (
                 <button 

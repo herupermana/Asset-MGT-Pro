@@ -9,7 +9,7 @@ import {
   FileText
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 
 const ReportCenter: React.FC = () => {
@@ -36,7 +36,7 @@ const ReportCenter: React.FC = () => {
   }, [spks, assets, filterAsset, filterTech, filterLocation, filterStatus, searchTerm]);
 
   const exportPDF = () => {
-    const doc = new jsPDF() as any;
+    const doc = new jsPDF();
     doc.setFontSize(18);
     doc.text('AssetPro Enterprise - Service Order Report', 14, 22);
     doc.setFontSize(11);
@@ -55,7 +55,7 @@ const ReportCenter: React.FC = () => {
       spk.priority
     ]);
 
-    doc.autoTable({
+    autoTable(doc, {
       head: [tableColumn],
       body: tableRows,
       startY: 45,

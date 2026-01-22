@@ -68,10 +68,11 @@ const TechnicianWorkspace: React.FC = () => {
     setShowNoteError(false);
   };
 
+  // Fixed error by explicitly typing 'file' as File
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files) {
-      Array.from(files).forEach(file => {
+      Array.from(files).forEach((file: File) => {
         const reader = new FileReader();
         reader.onloadend = () => {
           setEditEvidence(prev => [...prev, reader.result as string]);
@@ -108,7 +109,6 @@ const TechnicianWorkspace: React.FC = () => {
   if (!currentTechnician) {
     return (
       <div className="max-w-6xl mx-auto py-4 md:py-10 animate-in fade-in slide-in-from-bottom-6 duration-700">
-        {/* Login screens omitted for brevity as they remain same, just logic above added */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
           <div className="lg:col-span-7 space-y-12 py-6">
             <div className="space-y-6">
