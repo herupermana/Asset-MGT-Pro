@@ -317,7 +317,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
          api.updateTechnician(uTech);
          setTechnicians(p => p.map(t => t.id === uTech.id ? uTech : t));
        }
-       updateAssetStatus(spk.assetId, AssetStatus.OPERATIONAL);
+       
+       // Update Asset Record: Set status to Operational and update lastMaintenance date
+       const targetAsset = assets.find(a => a.id === spk.assetId);
+       if (targetAsset) {
+         updateAsset({ 
+           ...targetAsset, 
+           status: AssetStatus.OPERATIONAL, 
+           lastMaintenance: new Date().toISOString().split('T')[0] 
+         });
+       }
     }
   };
 

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Clock, CheckCircle2, User, AlertCircle, Calendar, Box, UserCog, X, UserCheck, ExternalLink, ChevronRight, Timer, Plus, Hammer, ClipboardList, Wrench, FileText, ShieldCheck, Loader2, Signal, AlertTriangle, Pencil, Save, HardHat, Activity } from 'lucide-react';
 import { useApp } from '../AppContext';
 import { SPKStatus, SPK, AssetStatus } from '../types';
@@ -50,7 +50,7 @@ const SPKManager: React.FC = () => {
         description: editingSPK.description,
         priority: editingSPK.priority,
         technicianId: editingSPK.technicianId,
-        dueDate: editingSPK.dueDate.split('T')[0]
+        dueDate: editingSPK.dueDate.includes('T') ? editingSPK.dueDate.split('T')[0] : editingSPK.dueDate
       });
       setIsModalOpen(true);
     }
@@ -107,10 +107,29 @@ const SPKManager: React.FC = () => {
     });
   };
 
-  const filteredSPKs = spks.filter(s => 
-    s.title.toLowerCase().includes(globalSearchQuery.toLowerCase()) ||
-    s.id.toLowerCase().includes(globalSearchQuery.toLowerCase())
-  );
+  // Smart Filtering and Sorting
+  const filteredSPKs = useMemo(() => {
+    const priorityWeight = { 'High': 3, 'Medium': 2, 'Low': 1 };
+    
+    return spks
+      .filter(s => 
+        s.title.toLowerCase().includes(globalSearchQuery.toLowerCase()) ||
+        s.id.toLowerCase().includes(globalSearchQuery.toLowerCase())
+      )
+      .sort((a, b) => {
+        // First sort by completion status (active first)
+        if (a.status === SPKStatus.COMPLETED && b.status !== SPKStatus.COMPLETED) return 1;
+        if (a.status !== SPKStatus.COMPLETED && b.status === SPKStatus.COMPLETED) return -1;
+        
+        // Then by priority
+        const pA = priorityWeight[a.priority as keyof typeof priorityWeight] || 0;
+        const pB = priorityWeight[b.priority as keyof typeof priorityWeight] || 0;
+        if (pA !== pB) return pB - pA;
+        
+        // Then by due date
+        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      });
+  }, [spks, globalSearchQuery]);
 
   if (viewingSPK) return <SPKDetail spk={viewingSPK} onBack={() => setViewingSPK(null)} onReassign={(spk) => setSelectedSPKForReassign(spk)} />;
 
@@ -141,15 +160,21 @@ const SPKManager: React.FC = () => {
             const asset = assets.find(a => a.id === spk.assetId);
             const tech = technicians.find(t => t.id === spk.technicianId);
             const isHighPriority = spk.priority === 'High';
-            const isOverdue = new Date(spk.dueDate) < new Date() && spk.status !== SPKStatus.COMPLETED;
+            const isCompleted = spk.status === SPKStatus.COMPLETED;
+            
+            const dueDateObj = new Date(spk.dueDate);
+            const today = new Date();
+            const isOverdue = dueDateObj < today && !isCompleted;
+            const daysLeft = Math.ceil((dueDateObj.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
             return (
               <div 
                 key={spk.id} 
-                className="glass-card rounded-[40px] border-white/5 hover:border-blue-500/40 transition-all duration-500 cursor-pointer group relative overflow-hidden active:scale-[0.99]"
+                className={`glass-card rounded-[40px] border-white/5 hover:border-blue-500/40 transition-all duration-500 cursor-pointer group relative overflow-hidden active:scale-[0.99] ${isCompleted ? 'opacity-70' : ''}`}
               >
                 {/* Visual Priority Accent */}
                 <div className={`absolute top-0 left-0 w-2 h-full transition-all duration-500 ${
+                  isCompleted ? 'bg-slate-700' :
                   isHighPriority ? 'bg-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.6)]' : 
                   spk.priority === 'Medium' ? 'bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.4)]' : 
                   'bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.4)]'
@@ -164,11 +189,12 @@ const SPKManager: React.FC = () => {
                       </div>
                       <StatusBadge status={spk.status} />
                       <div className={`px-3.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border flex items-center gap-2 transition-all ${
+                        isCompleted ? 'bg-slate-800 text-slate-400 border-slate-700' :
                         isHighPriority ? 'bg-rose-500/20 text-rose-500 border-rose-500/30' : 
                         spk.priority === 'Medium' ? 'bg-amber-500/20 text-amber-500 border-amber-500/30' :
                         'bg-blue-500/20 text-blue-400 border-blue-500/30'
                       }`}>
-                        {isHighPriority ? <AlertTriangle className="w-3.5 h-3.5 animate-pulse" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+                        {isHighPriority && !isCompleted ? <AlertTriangle className="w-3.5 h-3.5 animate-pulse" /> : <ShieldCheck className="w-3.5 h-3.5" />}
                         {spk.priority} Priority
                       </div>
                     </div>
@@ -218,8 +244,15 @@ const SPKManager: React.FC = () => {
                            <p className="text-[10px] font-black uppercase tracking-[0.3em]">{isOverdue ? 'CRITICAL OVERDUE' : 'SLA DEADLINE'}</p>
                         </div>
                         <p className={`text-xl font-black tracking-tighter uppercase ${isOverdue ? 'text-rose-400 text-glow-rose' : 'text-white'}`}>
-                          {new Date(spk.dueDate).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          {dueDateObj.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })}
                         </p>
+                        
+                        {!isCompleted && (
+                          <div className={`text-[10px] font-black uppercase tracking-widest ${isOverdue ? 'text-rose-500 animate-pulse' : 'text-blue-400'}`}>
+                             {isOverdue ? `EXCEEDED BY ${Math.abs(daysLeft)} DAYS` : `${daysLeft === 0 ? 'DUE TODAY' : `DUE IN ${daysLeft} DAYS`}`}
+                          </div>
+                        )}
+                        
                         {isOverdue && (
                           <div className="px-3 py-1 bg-rose-600 text-white rounded-lg text-[9px] font-black uppercase tracking-widest inline-block md:ml-auto">
                             Breach Detected
@@ -227,7 +260,7 @@ const SPKManager: React.FC = () => {
                         )}
                      </div>
                      <div className="flex items-center gap-4">
-                        {isAdmin && (
+                        {isAdmin && !isCompleted && (
                           <button 
                             onClick={(e) => { e.stopPropagation(); setEditingSPK(spk); }} 
                             className="p-5 rounded-2xl glass-card border-white/5 text-slate-400 hover:border-blue-500/50 hover:text-blue-400 transition-all shadow-2xl active:scale-90"

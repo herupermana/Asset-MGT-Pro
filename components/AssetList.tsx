@@ -1,11 +1,12 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, Plus, X, Scan, Pencil, Trash2, Box, Layers, MapPin, Activity, Terminal, ExternalLink, Loader2, CameraOff, Camera, Upload, Image as ImageIcon, Save, Check, ShieldAlert, RefreshCw } from 'lucide-react';
+import { Search, Plus, X, Scan, Pencil, Trash2, Box, Layers, MapPin, Activity, Terminal, ExternalLink, Loader2, CameraOff, Camera, Upload, Image as ImageIcon, Save, Check, ShieldAlert, RefreshCw, QrCode, Download, Printer } from 'lucide-react';
 import { useApp } from '../AppContext';
 import { Asset, AssetStatus, SPKStatus } from '../types';
 import AssetDetail from './AssetDetail';
 import SPKDetail from './SPKDetail';
 import jsQR from 'jsqr';
+import QRCode from 'qrcode';
 
 const AssetList: React.FC = () => {
   const { assets, addAsset, updateAsset, deleteAsset, categories, locations, createSPK, technicians, globalSearchQuery, setGlobalSearchQuery, currentTechnician, t } = useApp();
@@ -16,6 +17,10 @@ const AssetList: React.FC = () => {
   const [viewingAsset, setViewingAsset] = useState<Asset | null>(null);
   const [viewingSPKInDetail, setViewingSPKInDetail] = useState<any>(null);
   const [assetToEdit, setAssetToEdit] = useState<Asset | null>(null);
+  
+  // QR Code Generation State
+  const [qrModalAsset, setQrModalAsset] = useState<Asset | null>(null);
+  const [tempQrUrl, setTempQrUrl] = useState<string>('');
 
   const isAdmin = !currentTechnician;
 
@@ -166,6 +171,30 @@ const AssetList: React.FC = () => {
     });
   };
 
+  const generateQuickQR = async (asset: Asset) => {
+    try {
+      const url = await QRCode.toDataURL(asset.id, {
+        margin: 2,
+        width: 600,
+        color: { dark: '#020617', light: '#ffffff' },
+      });
+      setTempQrUrl(url);
+      setQrModalAsset(asset);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const downloadQuickQr = () => {
+    if (!tempQrUrl || !qrModalAsset) return;
+    const link = document.createElement('a');
+    link.href = tempQrUrl;
+    link.download = `QR-${qrModalAsset.id}-${qrModalAsset.name.replace(/\s+/g, '_')}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const filteredAssets = assets.filter(a => 
     a.name.toLowerCase().includes((searchTerm || globalSearchQuery).toLowerCase()) ||
     a.id.toLowerCase().includes((searchTerm || globalSearchQuery).toLowerCase())
@@ -229,10 +258,9 @@ const AssetList: React.FC = () => {
         {filteredAssets.map((asset) => (
           <div 
             key={asset.id} 
-            onClick={() => setViewingAsset(asset)}
             className="glass-card rounded-[40px] border-white/5 overflow-hidden group cursor-pointer hover:border-blue-500/30 transition-all duration-500 relative"
           >
-            <div className="absolute top-4 right-4 z-10">
+            <div className="absolute top-4 right-4 z-10" onClick={(e) => { e.stopPropagation(); setViewingAsset(asset); }}>
               <span className={`text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest border backdrop-blur-md ${
                 asset.status === AssetStatus.OPERATIONAL ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
                 asset.status === AssetStatus.MAINTENANCE ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
@@ -243,18 +271,18 @@ const AssetList: React.FC = () => {
               </span>
             </div>
             
-            <div className="h-56 overflow-hidden relative">
+            <div className="h-56 overflow-hidden relative" onClick={() => setViewingAsset(asset)}>
               <img src={asset.imageUrl} alt={asset.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
               <div className="absolute inset-0 bg-gradient-to-t from-[#020617] to-transparent opacity-60" />
             </div>
 
             <div className="p-8 space-y-6">
-              <div>
+              <div onClick={() => setViewingAsset(asset)}>
                 <div className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em] mb-1">{asset.id}</div>
                 <h3 className="text-xl font-extrabold text-white group-hover:text-blue-400 transition-colors leading-tight line-clamp-1">{asset.name}</h3>
               </div>
 
-              <div className="flex items-center gap-6">
+              <div className="flex items-center gap-6" onClick={() => setViewingAsset(asset)}>
                 <div className="flex items-center gap-2 text-slate-500">
                   <Layers className="w-4 h-4" />
                   <span className="text-xs font-bold uppercase tracking-tight">{asset.category}</span>
@@ -266,18 +294,86 @@ const AssetList: React.FC = () => {
               </div>
 
               <div className="pt-4 border-t border-white/5 flex items-center justify-between">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2" onClick={() => setViewingAsset(asset)}>
                   <Activity className="w-4 h-4 text-emerald-400/50" />
                   <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Diagnostics: OK</span>
                 </div>
-                <div className="p-2.5 rounded-xl bg-white/5 text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-all">
-                  <ExternalLink className="w-4 h-4" />
+                <div className="flex items-center gap-2">
+                  {isAdmin && (
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); generateQuickQR(asset); }}
+                      className="p-2.5 rounded-xl bg-white/5 text-slate-400 hover:bg-emerald-600 hover:text-white transition-all"
+                      title="Generate Asset Label QR"
+                    >
+                      <QrCode className="w-4 h-4" />
+                    </button>
+                  )}
+                  <div 
+                    onClick={(e) => { e.stopPropagation(); setViewingAsset(asset); }}
+                    className="p-2.5 rounded-xl bg-white/5 text-slate-400 hover:bg-blue-600 hover:text-white transition-all"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         ))}
       </div>
+
+      {/* QUICK QR GENERATION MODAL */}
+      {qrModalAsset && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-2xl">
+          <div className="max-w-md w-full glass-card rounded-[48px] overflow-hidden border-white/10 animate-in zoom-in-95 shadow-[0_0_100px_rgba(0,0,0,0.5)]">
+             <div className="p-8 border-b border-white/5 flex justify-between items-center">
+                <div>
+                   <h3 className="text-xl font-black text-white uppercase tracking-tight">Asset Label</h3>
+                   <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest mt-0.5">Physical Tag Generation</p>
+                </div>
+                <button onClick={() => { setQrModalAsset(null); setTempQrUrl(''); }} className="p-3 hover:bg-white/5 rounded-full text-slate-400 hover:text-white transition-all">
+                   <X className="w-6 h-6" />
+                </button>
+             </div>
+             
+             <div className="p-12 flex flex-col items-center gap-8">
+                <div className="p-6 bg-white rounded-[40px] shadow-[0_0_50px_rgba(255,255,255,0.1)] group">
+                   <img src={tempQrUrl} className="w-48 h-48 group-hover:scale-105 transition-transform duration-500" alt="Generated QR" />
+                </div>
+                
+                <div className="text-center">
+                   <p className="text-xl font-black text-white uppercase tracking-tight mb-1">{qrModalAsset.name}</p>
+                   <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">ID: {qrModalAsset.id}</p>
+                </div>
+
+                <div className="w-full flex flex-col gap-3 pt-4">
+                  <button 
+                    onClick={downloadQuickQr}
+                    className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-3 shadow-xl shadow-blue-500/20 hover:bg-blue-500 transition-all active:scale-95"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download PNG Label
+                  </button>
+                  <button 
+                    onClick={() => window.print()}
+                    className="w-full py-4 bg-white/5 text-slate-300 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-3 border border-white/5 hover:bg-white/10 transition-all"
+                  >
+                    <Printer className="w-4 h-4" />
+                    Print Technical Tag
+                  </button>
+                </div>
+             </div>
+
+             <div className="px-8 pb-8">
+               <div className="p-4 bg-blue-500/5 rounded-2xl border border-blue-500/10 flex items-start gap-3">
+                  <Terminal className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+                  <p className="text-[10px] text-slate-400 leading-relaxed">
+                    This encrypted tag links directly to the asset's digital twin in the global ledger. Field specialists can scan this tag to instantly retrieve technical documentation and maintenance logs.
+                  </p>
+               </div>
+             </div>
+          </div>
+        </div>
+      )}
 
       {/* QR SCANNER MODAL */}
       {isScannerOpen && (
@@ -324,7 +420,7 @@ const AssetList: React.FC = () => {
                     {/* Scanner Overlay UI */}
                     <div className="absolute inset-0 border-[60px] border-black/40 pointer-events-none flex items-center justify-center">
                        <div className="w-full h-full border-2 border-blue-500/50 rounded-3xl relative">
-                          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[2px] bg-blue-500 shadow-[0_0_15px_#3b82f6] animate-[scanline_2s_infinite]" />
+                          <div className="absolute top-0 left-1/2 -translate-y-1/2 w-full h-[2px] bg-blue-500 shadow-[0_0_15px_#3b82f6] animate-[scanline_2s_infinite]" />
                        </div>
                     </div>
                   </>
@@ -351,7 +447,7 @@ const AssetList: React.FC = () => {
       {/* MANAGE ASSET MODAL (ADD/EDIT) */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xl overflow-y-auto custom-scrollbar">
-           <div className="max-w-3xl w-full glass-card rounded-[48px] overflow-hidden border-white/10 animate-in zoom-in-95 my-8">
+           <div className="max-w-3xl w-full glass-card rounded-[48px] overflow-hidden border-white/10 animate-in zoom-in-95 duration-300 my-8">
               <div className="p-10 border-b border-white/5 flex justify-between items-center">
                  <div>
                     <h3 className="text-2xl font-black text-white uppercase tracking-tight">
