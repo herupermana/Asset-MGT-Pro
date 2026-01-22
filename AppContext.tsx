@@ -36,6 +36,7 @@ interface AppContextType {
   addLocation: (location: string) => void;
   removeLocation: (location: string) => void;
   createSPK: (spk: SPK) => void;
+  updateSPK: (spk: SPK) => void;
   reassignSPK: (spkId: string, newTechnicianId: string) => void;
   updateSPKStatus: (id: string, status: SPKStatus, note?: string, evidence?: string[]) => void;
   updateAssetStatus: (id: string, status: AssetStatus) => void;
@@ -122,16 +123,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [storageMode, setStorageModeState] = useState<StorageMode>(api.getMode());
   const [isDbConnected, setIsDbConnected] = useState(true);
 
-  // Initial Data Fetch
+  // Initial Data Fetch with Seed Protection
   useEffect(() => {
     const loadData = async () => {
       try {
         const [a, s, t] = await Promise.all([api.fetchAssets(), api.fetchSPKs(), api.fetchTechnicians()]);
-        // If local and empty, seed with mocks
-        if (api.getMode() === 'local' && a.length === 0) {
+        
+        const hasSeededBefore = localStorage.getItem('ap_system_seeded') === 'true';
+        
+        if (api.getMode() === 'local' && a.length === 0 && !hasSeededBefore) {
+          // One-time demo seed
           setAssets(MOCK_ASSETS);
           setSpks(MOCK_SPKS);
           setTechnicians(MOCK_TECHNICIANS);
+          localStorage.setItem('ap_assets', JSON.stringify(MOCK_ASSETS));
+          localStorage.setItem('ap_spks', JSON.stringify(MOCK_SPKS));
+          localStorage.setItem('ap_technicians', JSON.stringify(MOCK_TECHNICIANS));
+          localStorage.setItem('ap_system_seeded', 'true');
         } else {
           setAssets(a);
           setSpks(s);
@@ -143,7 +151,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
     loadData();
     
-    // Connectivity Monitoring
     const interval = setInterval(async () => {
       const ok = await api.checkConnection();
       setIsDbConnected(ok);
@@ -183,7 +190,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const handleFullLedgerTranslation = async (targetLang: Language) => {
     const langName = targetLang === 'id' ? 'Indonesian' : 'English';
-    
     const translatedSpks = await Promise.all(spks.map(async (s) => {
       try {
         const title = await gemini.translateText(s.title, langName);
@@ -202,114 +208,193 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setAssets(translatedAssets);
   };
 
-  useEffect(() => {
-    if (theme === 'light') document.body.classList.add('light-mode');
-    else document.body.classList.remove('light-mode');
-  }, [theme]);
-
-  // Save localized changes if in local mode
-  useEffect(() => { if (api.getMode() === 'local') localStorage.setItem('ap_assets', JSON.stringify(assets)); }, [assets]);
-  useEffect(() => { if (api.getMode() === 'local') localStorage.setItem('ap_spks', JSON.stringify(spks)); }, [spks]);
-  useEffect(() => { if (api.getMode() === 'local') localStorage.setItem('ap_technicians', JSON.stringify(technicians)); }, [technicians]);
-  useEffect(() => { localStorage.setItem('ap_categories', JSON.stringify(categories)); }, [categories]);
-  useEffect(() => { localStorage.setItem('ap_locations', JSON.stringify(locations)); }, [locations]);
-  useEffect(() => { 
-    if (currentTechnician) localStorage.setItem('ap_current_tech', JSON.stringify(currentTechnician));
-    else localStorage.removeItem('ap_current_tech');
-  }, [currentTechnician]);
-  useEffect(() => { localStorage.setItem('ap_admin_auth', isAdminLoggedIn.toString()); }, [isAdminLoggedIn]);
-
+  // Explicit persistence for all activities
   const addAsset = (asset: Asset) => {
     setAssets(prev => [asset, ...prev]);
     api.createAsset(asset);
   };
-  const updateAsset = (updatedAsset: Asset) => setAssets(prev => prev.map(a => a.id === updatedAsset.id ? updatedAsset : a));
+  
+  const updateAsset = (updatedAsset: Asset) => {
+    setAssets(prev => prev.map(a => a.id === updatedAsset.id ? updatedAsset : a));
+    api.updateAsset(updatedAsset);
+  };
+  
   const deleteAsset = (id: string) => {
     setAssets(prev => prev.filter(a => a.id !== id));
-    setSpks(prev => prev.filter(s => s.assetId !== id));
+    api.deleteAsset(id);
   };
+
   const addCategory = (category: string) => {
-    if (!categories.includes(category)) setCategories(prev => [...prev, category].sort());
+    if (!categories.includes(category)) {
+      const updated = [...categories, category].sort();
+      setCategories(updated);
+      localStorage.setItem('ap_categories', JSON.stringify(updated));
+    }
   };
-  const removeCategory = (category: string) => setCategories(prev => prev.filter(c => c !== category));
+
+  const removeCategory = (category: string) => {
+    const updated = categories.filter(c => c !== category);
+    setCategories(updated);
+    localStorage.setItem('ap_categories', JSON.stringify(updated));
+  };
+
   const addLocation = (location: string) => {
-    if (!locations.includes(location)) setLocations(prev => [...prev, location].sort());
+    if (!locations.includes(location)) {
+      const updated = [...locations, location].sort();
+      setLocations(updated);
+      localStorage.setItem('ap_locations', JSON.stringify(updated));
+    }
   };
-  const removeLocation = (location: string) => setLocations(prev => prev.filter(l => l !== location));
+
+  const removeLocation = (location: string) => {
+    const updated = locations.filter(l => l !== location);
+    setLocations(updated);
+    localStorage.setItem('ap_locations', JSON.stringify(updated));
+  };
 
   const createSPK = (spk: SPK) => {
     setSpks(prev => [spk, ...prev]);
     api.createSPK(spk);
-    setTechnicians(prev => prev.map(t => t.id === spk.technicianId ? { ...t, activeTasks: t.activeTasks + 1 } : t));
+    
+    const tech = technicians.find(t => t.id === spk.technicianId);
+    if (tech) {
+      const updatedTech = { ...tech, activeTasks: tech.activeTasks + 1 };
+      setTechnicians(prev => prev.map(t => t.id === tech.id ? updatedTech : t));
+      api.updateTechnician(updatedTech);
+    }
+    
     updateAssetStatus(spk.assetId, AssetStatus.REPAIR);
+  };
+
+  const updateSPK = (updatedSpk: SPK) => {
+    const originalSpk = spks.find(s => s.id === updatedSpk.id);
+    setSpks(prev => prev.map(s => s.id === updatedSpk.id ? updatedSpk : s));
+    api.updateSPK(updatedSpk);
+
+    if (originalSpk && originalSpk.technicianId !== updatedSpk.technicianId) {
+       // Handover logic
+       const oldTech = technicians.find(t => t.id === originalSpk.technicianId);
+       const newTech = technicians.find(t => t.id === updatedSpk.technicianId);
+       
+       if (oldTech) {
+         const uOld = { ...oldTech, activeTasks: Math.max(0, oldTech.activeTasks - 1) };
+         api.updateTechnician(uOld);
+         setTechnicians(p => p.map(t => t.id === uOld.id ? uOld : t));
+       }
+       if (newTech) {
+         const uNew = { ...newTech, activeTasks: newTech.activeTasks + 1 };
+         api.updateTechnician(uNew);
+         setTechnicians(p => p.map(t => t.id === uNew.id ? uNew : t));
+       }
+    }
   };
 
   const reassignSPK = (spkId: string, newTechnicianId: string) => {
     const spk = spks.find(s => s.id === spkId);
-    if (!spk || spk.status === SPKStatus.COMPLETED || spk.technicianId === newTechnicianId) return;
-    const oldTechId = spk.technicianId;
-    setTechnicians(prev => prev.map(t => {
-      if (t.id === oldTechId) return { ...t, activeTasks: Math.max(0, t.activeTasks - 1) };
-      if (t.id === newTechnicianId) return { ...t, activeTasks: t.activeTasks + 1 };
-      return t;
-    }));
-    setSpks(prev => prev.map(s => s.id === spkId ? { ...s, technicianId: newTechnicianId } : s));
+    if (!spk || spk.status === SPKStatus.COMPLETED) return;
+    updateSPK({ ...spk, technicianId: newTechnicianId });
   };
 
   const updateSPKStatus = (id: string, status: SPKStatus, note?: string, evidence?: string[]) => {
-    setSpks(prev => prev.map(s => {
-      if (s.id === id) {
-        if (status === SPKStatus.COMPLETED && s.status !== SPKStatus.COMPLETED) {
-           setTechnicians(tPrev => tPrev.map(t => t.id === s.technicianId ? { ...t, activeTasks: Math.max(0, t.activeTasks - 1) } : t));
-           updateAssetStatus(s.assetId, AssetStatus.OPERATIONAL);
-        }
-        return { 
-          ...s, 
-          status, 
-          completionNote: note || s.completionNote,
-          evidence: evidence || s.evidence,
-          completedAt: status === SPKStatus.COMPLETED ? new Date().toISOString() : s.completedAt 
-        };
-      }
-      return s;
-    }));
+    const spk = spks.find(s => s.id === id);
+    if (!spk) return;
+
+    const updatedSpk = { 
+      ...spk, 
+      status, 
+      completionNote: note || spk.completionNote,
+      evidence: evidence || spk.evidence,
+      completedAt: status === SPKStatus.COMPLETED ? new Date().toISOString() : spk.completedAt 
+    };
+
+    setSpks(prev => prev.map(s => s.id === id ? updatedSpk : s));
+    api.updateSPK(updatedSpk);
+
+    if (status === SPKStatus.COMPLETED && spk.status !== SPKStatus.COMPLETED) {
+       const tech = technicians.find(t => t.id === spk.technicianId);
+       if (tech) {
+         const uTech = { ...tech, activeTasks: Math.max(0, tech.activeTasks - 1) };
+         api.updateTechnician(uTech);
+         setTechnicians(p => p.map(t => t.id === uTech.id ? uTech : t));
+       }
+       updateAssetStatus(spk.assetId, AssetStatus.OPERATIONAL);
+    }
   };
 
   const updateAssetStatus = (id: string, status: AssetStatus) => {
-    setAssets(prev => prev.map(a => a.id === id ? { ...a, status } : a));
+    const asset = assets.find(a => a.id === id);
+    if (asset) {
+      const updated = { ...asset, status };
+      setAssets(prev => prev.map(a => a.id === id ? updated : a));
+      api.updateAsset(updated);
+    }
   };
 
   const bulkRestoreData = (data: any) => {
     if (data.assets) setAssets(data.assets);
     if (data.spks) setSpks(data.spks);
     if (data.technicians) setTechnicians(data.technicians);
-    if (data.categories) setCategories(data.categories);
-    if (data.locations) setLocations(data.locations);
+    // Persist bulk restore
+    localStorage.setItem('ap_assets', JSON.stringify(data.assets));
+    localStorage.setItem('ap_spks', JSON.stringify(data.spks));
+    localStorage.setItem('ap_technicians', JSON.stringify(data.technicians));
   };
 
   const loginTechnician = async (id: string, password: string): Promise<boolean> => {
     const tech = technicians.find(t => t.id === id && t.password === password);
-    if (tech) { setCurrentTechnician(tech); return true; }
+    if (tech) { 
+      setCurrentTechnician(tech); 
+      localStorage.setItem('ap_current_tech', JSON.stringify(tech));
+      return true; 
+    }
     return false;
   };
 
   const loginAdmin = async (password: string): Promise<boolean> => {
-    if (password === 'admin123') { setIsAdminLoggedIn(true); return true; }
+    if (password === 'admin123') { 
+      setIsAdminLoggedIn(true); 
+      localStorage.setItem('ap_admin_auth', 'true');
+      return true; 
+    }
     return false;
   };
 
-  const logout = () => setCurrentTechnician(null);
-  const logoutAdmin = () => setIsAdminLoggedIn(false);
-  const addTechnician = (tech: Technician) => setTechnicians(prev => [tech, ...prev]);
-  const deleteTechnician = (id: string) => setTechnicians(prev => prev.filter(t => t.id !== id));
-  const updateTechnicianRank = (id: string, rank: string) => setTechnicians(prev => prev.map(t => t.id === id ? { ...t, rank } : t));
+  const logout = () => {
+    setCurrentTechnician(null);
+    localStorage.removeItem('ap_current_tech');
+  };
+
+  const logoutAdmin = () => {
+    setIsAdminLoggedIn(false);
+    localStorage.setItem('ap_admin_auth', 'false');
+  };
+
+  const addTechnician = (tech: Technician) => {
+    setTechnicians(prev => [tech, ...prev]);
+    // Note: api service would ideally have createTechnician too
+    localStorage.setItem('ap_technicians', JSON.stringify([tech, ...technicians]));
+  };
+
+  const deleteTechnician = (id: string) => {
+    setTechnicians(prev => prev.filter(t => t.id !== id));
+    api.deleteTechnician(id);
+  };
+
+  const updateTechnicianRank = (id: string, rank: string) => {
+    const tech = technicians.find(t => t.id === id);
+    if (tech) {
+      const uTech = { ...tech, rank };
+      setTechnicians(prev => prev.map(t => t.id === id ? uTech : t));
+      api.updateTechnician(uTech);
+    }
+  };
 
   return (
     <AppContext.Provider value={{ 
       assets, spks, technicians, categories, locations, globalSearchQuery, currentTechnician, isAdminLoggedIn, 
       theme, language, isAutoTranslateEnabled, storageMode, isDbConnected,
       setTheme, setLanguage, setAutoTranslate, setStorageMode, setDbEndpoint, setGlobalSearchQuery, addAsset, updateAsset, deleteAsset, 
-      addCategory, removeCategory, addLocation, removeLocation, createSPK, reassignSPK, updateSPKStatus, updateAssetStatus,
+      addCategory, removeCategory, addLocation, removeLocation, createSPK, updateSPK, reassignSPK, updateSPKStatus, updateAssetStatus,
       loginTechnician, loginAdmin, logout, logoutAdmin, addTechnician, deleteTechnician, updateTechnicianRank, bulkRestoreData, t
     }}>
       {children}

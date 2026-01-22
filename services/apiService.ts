@@ -21,13 +21,14 @@ class ApiService {
     return this.mode;
   }
 
+  // --- ASSETS ---
   async fetchAssets(): Promise<Asset[]> {
     if (this.mode === 'local') {
       const saved = localStorage.getItem('ap_assets');
       return saved ? JSON.parse(saved) : [];
     }
     const response = await fetch(`${this.apiBaseUrl}/assets`);
-    if (!response.ok) throw new Error('Failed to fetch from SQL Node');
+    if (!response.ok) throw new Error('Persistence Node Unreachable');
     return response.json();
   }
 
@@ -44,6 +45,30 @@ class ApiService {
     });
   }
 
+  async updateAsset(asset: Asset): Promise<void> {
+    if (this.mode === 'local') {
+      const assets = await this.fetchAssets();
+      const updated = assets.map(a => a.id === asset.id ? asset : a);
+      localStorage.setItem('ap_assets', JSON.stringify(updated));
+      return;
+    }
+    await fetch(`${this.apiBaseUrl}/assets/${asset.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(asset),
+    });
+  }
+
+  async deleteAsset(id: string): Promise<void> {
+    if (this.mode === 'local') {
+      const assets = await this.fetchAssets();
+      localStorage.setItem('ap_assets', JSON.stringify(assets.filter(a => a.id !== id)));
+      return;
+    }
+    await fetch(`${this.apiBaseUrl}/assets/${id}`, { method: 'DELETE' });
+  }
+
+  // --- SPK (WORK ORDERS) ---
   async fetchSPKs(): Promise<SPK[]> {
     if (this.mode === 'local') {
       const saved = localStorage.getItem('ap_spks');
@@ -66,6 +91,21 @@ class ApiService {
     });
   }
 
+  async updateSPK(spk: SPK): Promise<void> {
+    if (this.mode === 'local') {
+      const spks = await this.fetchSPKs();
+      const updated = spks.map(s => s.id === spk.id ? spk : s);
+      localStorage.setItem('ap_spks', JSON.stringify(updated));
+      return;
+    }
+    await fetch(`${this.apiBaseUrl}/spks/${spk.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(spk),
+    });
+  }
+
+  // --- TECHNICIANS ---
   async fetchTechnicians(): Promise<Technician[]> {
     if (this.mode === 'local') {
       const saved = localStorage.getItem('ap_technicians');
@@ -75,7 +115,29 @@ class ApiService {
     return response.json();
   }
 
-  // Helper to simulate a health check
+  async updateTechnician(tech: Technician): Promise<void> {
+    if (this.mode === 'local') {
+      const techs = await this.fetchTechnicians();
+      const updated = techs.map(t => t.id === tech.id ? tech : t);
+      localStorage.setItem('ap_technicians', JSON.stringify(updated));
+      return;
+    }
+    await fetch(`${this.apiBaseUrl}/technicians/${tech.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(tech),
+    });
+  }
+
+  async deleteTechnician(id: string): Promise<void> {
+    if (this.mode === 'local') {
+      const techs = await this.fetchTechnicians();
+      localStorage.setItem('ap_technicians', JSON.stringify(techs.filter(t => t.id !== id)));
+      return;
+    }
+    await fetch(`${this.apiBaseUrl}/technicians/${id}`, { method: 'DELETE' });
+  }
+
   async checkConnection(): Promise<boolean> {
     if (this.mode === 'local') return true;
     try {

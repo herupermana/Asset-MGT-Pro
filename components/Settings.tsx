@@ -8,7 +8,7 @@ import {
   Moon, Sun, Globe, Database, 
   Smartphone, Monitor, RefreshCw, X, Check,
   History, Loader2, Languages, Sparkles, Server, Network, 
-  Activity, CloudUpload, ShieldCheck
+  Activity, CloudUpload, ShieldCheck, DatabaseZap
 } from 'lucide-react';
 
 const SettingsView: React.FC = () => {
@@ -30,7 +30,6 @@ const SettingsView: React.FC = () => {
 
   const handleGlobalSave = () => {
     setIsSaving(true);
-    // Simulate sync
     setTimeout(() => {
       setDbEndpoint(dbUrl);
       setIsSaving(false);
@@ -67,7 +66,7 @@ const SettingsView: React.FC = () => {
                 <div className="flex gap-3">
                   <input 
                     placeholder="New classification..." 
-                    className="flex-1 px-6 py-4 rounded-2xl outline-none text-white font-bold text-sm"
+                    className="flex-1 px-6 py-4 rounded-2xl outline-none text-white font-bold text-sm bg-white/5 border border-white/10"
                     value={newCatName}
                     onChange={e => setNewCatName(e.target.value)}
                   />
@@ -108,7 +107,7 @@ const SettingsView: React.FC = () => {
                 <div className="flex gap-3">
                   <input 
                     placeholder="New site location..." 
-                    className="flex-1 px-6 py-4 rounded-2xl outline-none text-white font-bold text-sm"
+                    className="flex-1 px-6 py-4 rounded-2xl outline-none text-white font-bold text-sm bg-white/5 border border-white/10"
                     value={newLocName}
                     onChange={e => setNewLocName(e.target.value)}
                   />
@@ -200,6 +199,16 @@ const SettingsView: React.FC = () => {
       case 'infrastructure':
         return (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="p-8 bg-blue-600/10 border border-blue-500/20 rounded-[32px] flex items-center gap-6">
+              <div className="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-xl">
+                <DatabaseZap className="w-8 h-8" />
+              </div>
+              <div>
+                <h4 className="text-lg font-black text-white uppercase tracking-tight">Enterprise Persistence Hub</h4>
+                <p className="text-sm text-slate-400 font-medium">Switch between local sandbox and corporate production database.</p>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-6">
               <button 
                 onClick={() => { setStorageMode('local'); setHasUnsavedChanges(true); }}
@@ -207,8 +216,8 @@ const SettingsView: React.FC = () => {
               >
                 <Smartphone className="w-10 h-10 text-blue-500" />
                 <div>
-                  <h4 className="text-lg font-black text-white uppercase">Local Storage</h4>
-                  <p className="text-xs text-slate-500 font-bold mt-1">Data persists in local browser cache</p>
+                  <h4 className="text-lg font-black text-white uppercase">Local Ledger</h4>
+                  <p className="text-xs text-slate-500 font-bold mt-1">Safe browser-based persistence for testing.</p>
                 </div>
               </button>
               <button 
@@ -217,8 +226,8 @@ const SettingsView: React.FC = () => {
               >
                 <Server className="w-10 h-10 text-indigo-500" />
                 <div>
-                  <h4 className="text-lg font-black text-white uppercase">SQL Bridge</h4>
-                  <p className="text-xs text-slate-500 font-bold mt-1">Connect to MySQL via External API</p>
+                  <h4 className="text-lg font-black text-white uppercase">Corporate SQL</h4>
+                  <p className="text-xs text-slate-500 font-bold mt-1">Connect to your real central database.</p>
                 </div>
               </button>
             </div>
@@ -226,24 +235,24 @@ const SettingsView: React.FC = () => {
             {storageMode === 'sql_remote' && (
               <div className="glass-card p-10 rounded-[48px] border-white/5 space-y-8 animate-in zoom-in-95">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-xl font-black text-white uppercase">API Connectivity</h4>
+                  <h4 className="text-xl font-black text-white uppercase tracking-tight">API Connectivity Configuration</h4>
                   <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${isDbConnected ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-rose-500/10 text-rose-500 border-rose-500/20'}`}>
                     <Activity className={`w-3.5 h-3.5 ${isDbConnected ? 'animate-pulse' : ''}`} />
-                    {isDbConnected ? 'Node Online' : 'Node Disconnected'}
+                    {isDbConnected ? 'Secure Node Online' : 'Persistence Node Disconnected'}
                   </div>
                 </div>
                 <div className="space-y-6">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Remote REST Endpoint</label>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Central API REST Endpoint</label>
                     <input 
-                      className="w-full px-6 py-4 rounded-2xl outline-none text-white font-bold"
+                      className="w-full px-6 py-4 rounded-2xl outline-none text-white font-bold bg-white/5 border border-white/10 focus:ring-4 focus:ring-blue-500/20"
                       value={dbUrl}
                       onChange={(e) => setDbUrl(e.target.value)}
                     />
                   </div>
                   <div className="p-6 bg-blue-500/5 border border-blue-500/10 rounded-3xl text-sm text-slate-400 font-medium">
-                    <p className="flex items-center gap-2 text-blue-400 font-black uppercase text-[10px] tracking-widest mb-2"><Network className="w-4 h-4" />Integration Note</p>
-                    Your external node must support JSON REST protocols. Ensure the SQL bridge is active before committing large datasets.
+                    <p className="flex items-center gap-2 text-blue-400 font-black uppercase text-[10px] tracking-widest mb-2"><Network className="w-4 h-4" />Integration Protocol</p>
+                    The Enterprise System will send JSON POST/PUT/DELETE requests to this endpoint. Historical logs are automatically synchronized upon successful authorization.
                   </div>
                 </div>
               </div>
@@ -264,7 +273,7 @@ const SettingsView: React.FC = () => {
           </div>
           <div>
             <h2 className="text-4xl font-black text-white tracking-tighter uppercase text-glow-blue">System <span className="text-blue-500">Architecture</span></h2>
-            <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mt-1">Configure global operational parameters</p>
+            <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mt-1">Configure global operational & persistence parameters</p>
           </div>
         </div>
       </div>
@@ -274,7 +283,7 @@ const SettingsView: React.FC = () => {
           {[
             { id: 'system', icon: Database, label: 'Asset Core' },
             { id: 'appearance', icon: Monitor, label: 'Interface' },
-            { id: 'infrastructure', icon: Server, label: 'Infrastructure' },
+            { id: 'infrastructure', icon: Server, label: 'Persistence' },
             { id: 'governance', icon: ShieldCheck, label: 'Data Security' },
           ].map(item => (
             <button
@@ -298,15 +307,15 @@ const SettingsView: React.FC = () => {
 
       {/* FIXED SAVE BUTTON (Floating Bar) */}
       {(hasUnsavedChanges || isSaving) && (
-        <div className="fixed bottom-10 right-10 left-[256px] flex justify-center z-[60] animate-in slide-in-from-bottom-10 duration-500 no-print">
+        <div className="fixed bottom-10 right-10 left-[300px] flex justify-center z-[60] animate-in slide-in-from-bottom-10 duration-500 no-print">
           <div className="glass-card px-10 py-5 rounded-[40px] border-blue-500/30 flex items-center gap-12 shadow-2xl shadow-blue-500/20">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-500">
                 <CloudUpload className="w-6 h-6" />
               </div>
               <div>
-                <p className="text-sm font-black text-white uppercase tracking-tight">Unsaved Configurations</p>
-                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Changes detected in active session</p>
+                <p className="text-sm font-black text-white uppercase tracking-tight">Persistence Pending</p>
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Commit changes to permanent storage</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -314,7 +323,7 @@ const SettingsView: React.FC = () => {
                 onClick={() => window.location.reload()}
                 className="px-6 py-3 text-[10px] font-black uppercase text-slate-500 hover:text-white transition-all"
               >
-                Discard
+                Abort
               </button>
               <button 
                 onClick={handleGlobalSave}
@@ -322,7 +331,7 @@ const SettingsView: React.FC = () => {
                 className="bg-blue-600 hover:bg-blue-500 text-white px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-blue-500/40 flex items-center gap-3 transition-all active:scale-95 disabled:opacity-50"
               >
                 {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                {isSaving ? 'Syncing...' : 'Save All Changes'}
+                {isSaving ? 'Synchronizing...' : 'Commit Changes'}
               </button>
             </div>
           </div>
@@ -336,8 +345,8 @@ const SettingsView: React.FC = () => {
             <Check className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-sm font-black text-white uppercase">Sync Complete</p>
-            <p className="text-[10px] text-slate-500 font-bold uppercase">System state updated successfully</p>
+            <p className="text-sm font-black text-white uppercase">Ledger Sync Complete</p>
+            <p className="text-[10px] text-slate-500 font-bold uppercase">All activities archived to primary node</p>
           </div>
         </div>
       )}

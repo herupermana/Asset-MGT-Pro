@@ -32,6 +32,7 @@ export interface Technician {
   activeTasks: number;
   password?: string;
   rank?: string; // New field for badge rank
+  averageRating?: number; // New field for satisfaction metrics
 }
 
 export interface SPK {
