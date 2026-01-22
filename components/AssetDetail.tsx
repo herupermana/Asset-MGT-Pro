@@ -26,6 +26,12 @@ const AssetDetail: React.FC<AssetDetailProps> = ({ asset, onBack, onEdit, onRepo
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   const latestActiveSPK = assetHistory.find(s => s.status !== SPKStatus.COMPLETED && s.status !== SPKStatus.CANCELLED);
+  
+  // Find the most relevant note for the status tooltip
+  const lastSpk = assetHistory[0];
+  const maintenanceNote = lastSpk 
+    ? (lastSpk.status === SPKStatus.COMPLETED ? (lastSpk.completionNote || "Service completed without specific notes.") : lastSpk.description)
+    : "No maintenance history recorded for this node.";
 
   useEffect(() => {
     const generateQr = async () => {
@@ -55,6 +61,8 @@ const AssetDetail: React.FC<AssetDetailProps> = ({ asset, onBack, onEdit, onRepo
     onReportIssue(asset);
   };
 
+  const isOffline = asset.status === AssetStatus.MAINTENANCE || asset.status === AssetStatus.REPAIR;
+
   return (
     <div className="space-y-10 animate-in fade-in duration-700">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -65,9 +73,37 @@ const AssetDetail: React.FC<AssetDetailProps> = ({ asset, onBack, onEdit, onRepo
           <div>
             <div className="flex items-center gap-3">
               <h2 className="text-4xl font-black text-white tracking-tighter uppercase">{asset.name}</h2>
-              <span className={`text-[10px] font-black px-3 py-1 rounded-lg uppercase tracking-widest border ${
-                asset.status === AssetStatus.OPERATIONAL ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-              }`}>{asset.status}</span>
+              <div 
+                className="relative inline-block"
+                onMouseEnter={() => isOffline && setShowTooltip(true)}
+                onMouseLeave={() => setShowTooltip(false)}
+              >
+                <span className={`text-[10px] font-black px-3 py-1 rounded-lg uppercase tracking-widest border cursor-help ${
+                  asset.status === AssetStatus.OPERATIONAL ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 
+                  asset.status === AssetStatus.MAINTENANCE ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                  asset.status === AssetStatus.REPAIR ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                  'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                }`}>
+                  {asset.status}
+                </span>
+
+                {showTooltip && (
+                  <div className="absolute left-0 top-full mt-3 z-50 w-64 p-5 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="flex items-center gap-2 mb-3 text-blue-400">
+                      <Info className="w-3.5 h-3.5" />
+                      <span className="text-[10px] font-black uppercase tracking-widest">Service Context</span>
+                    </div>
+                    <p className="text-xs text-slate-300 leading-relaxed italic font-medium">
+                      "{maintenanceNote}"
+                    </p>
+                    <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between">
+                       <span className="text-[9px] font-bold text-slate-500 uppercase">Last Log: {lastSpk?.id || 'N/A'}</span>
+                    </div>
+                    {/* Tooltip Arrow */}
+                    <div className="absolute -top-1 left-4 w-2 h-2 bg-slate-900 border-t border-l border-white/10 rotate-45" />
+                  </div>
+                )}
+              </div>
             </div>
             <p className="text-slate-500 font-bold tracking-widest uppercase text-xs mt-1">Unique Identifier: {asset.id}</p>
           </div>

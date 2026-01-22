@@ -8,7 +8,7 @@ import { AssetStatus, SPKStatus } from '../types';
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
 
 const Dashboard: React.FC = () => {
-  const { assets, spks } = useApp();
+  const { assets, spks, t } = useApp();
 
   const activeOrders = spks.filter(s => s.status !== SPKStatus.COMPLETED).length;
   const operationalCount = assets.filter(a => a.status === AssetStatus.OPERATIONAL).length;
@@ -16,17 +16,17 @@ const Dashboard: React.FC = () => {
   const criticalCount = assets.filter(a => a.status === AssetStatus.BROKEN).length;
 
   const stats = [
-    { label: 'Total Assets', value: assets.length.toLocaleString(), icon: Package, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/30' },
-    { label: 'Active Tasks', value: activeOrders.toString(), icon: Clock, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/30' },
-    { label: 'System Uptime', value: `${operationalRate}%`, icon: CheckCircle2, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30' },
-    { label: 'Critical Faults', value: criticalCount.toString(), icon: AlertTriangle, color: 'text-rose-400', bg: 'bg-rose-500/10', border: 'border-rose-500/30' },
+    { label: t('total_assets'), value: assets.length.toLocaleString(), icon: Package, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/30' },
+    { label: t('active_tasks'), value: activeOrders.toString(), icon: Clock, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/30' },
+    { label: t('system_uptime'), value: `${operationalRate}%`, icon: CheckCircle2, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30' },
+    { label: t('critical_faults'), value: criticalCount.toString(), icon: AlertTriangle, color: 'text-rose-400', bg: 'bg-rose-500/10', border: 'border-rose-500/30' },
   ];
 
   const chartData = [
-    { name: 'Operational', value: operationalCount },
-    { name: 'Maintenance', value: assets.filter(a => a.status === AssetStatus.MAINTENANCE).length },
-    { name: 'Repair', value: assets.filter(a => a.status === AssetStatus.REPAIR).length },
-    { name: 'Broken', value: criticalCount },
+    { name: t('operational'), value: operationalCount },
+    { name: t('maintenance'), value: assets.filter(a => a.status === AssetStatus.MAINTENANCE).length },
+    { name: t('repair'), value: assets.filter(a => a.status === AssetStatus.REPAIR).length },
+    { name: t('broken'), value: criticalCount },
   ];
 
   return (

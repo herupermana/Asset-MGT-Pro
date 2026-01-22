@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, Plus, X, Scan, Pencil, Trash2, Box, Layers, MapPin, Activity, Terminal, ExternalLink, Loader2, CameraOff } from 'lucide-react';
+import { Search, Plus, X, Scan, Pencil, Trash2, Box, Layers, MapPin, Activity, Terminal, ExternalLink, Loader2, CameraOff, Camera, Upload, Image as ImageIcon } from 'lucide-react';
 import { useApp } from '../AppContext';
 import { Asset, AssetStatus, SPKStatus } from '../types';
 import AssetDetail from './AssetDetail';
@@ -8,7 +8,7 @@ import SPKDetail from './SPKDetail';
 import jsQR from 'jsqr';
 
 const AssetList: React.FC = () => {
-  const { assets, addAsset, updateAsset, deleteAsset, categories, locations, createSPK, technicians, globalSearchQuery, setGlobalSearchQuery, currentTechnician } = useApp();
+  const { assets, addAsset, updateAsset, deleteAsset, categories, locations, createSPK, technicians, globalSearchQuery, setGlobalSearchQuery, currentTechnician, t } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -23,9 +23,12 @@ const AssetList: React.FC = () => {
     category: categories[0] || '', 
     location: locations[0] || '', 
     status: AssetStatus.OPERATIONAL,
+    imageUrl: '',
     purchaseDate: new Date().toISOString().split('T')[0],
     arrivedDate: new Date().toISOString().split('T')[0]
   });
+
+  const assetFileInputRef = useRef<HTMLInputElement>(null);
 
   // Scanner Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -92,16 +95,36 @@ const AssetList: React.FC = () => {
     scanFrameRef.current = requestAnimationFrame(tick);
   };
 
+  const handleAssetImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setNewAsset(prev => ({ ...prev, imageUrl: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleAddAsset = (e: React.FormEvent) => {
     e.preventDefault();
     const id = `AST-${Math.floor(1000 + Math.random() * 9000)}`;
     addAsset({
       ...newAsset,
       id,
-      imageUrl: `https://picsum.photos/seed/${id}/400/300`,
+      imageUrl: newAsset.imageUrl || `https://picsum.photos/seed/${id}/400/300`,
       lastMaintenance: 'Never'
     });
     setIsModalOpen(false);
+    setNewAsset({
+      name: '', 
+      category: categories[0] || '', 
+      location: locations[0] || '', 
+      status: AssetStatus.OPERATIONAL,
+      imageUrl: '',
+      purchaseDate: new Date().toISOString().split('T')[0],
+      arrivedDate: new Date().toISOString().split('T')[0]
+    });
   };
 
   const filteredAssets = assets.filter(a => 
@@ -110,7 +133,7 @@ const AssetList: React.FC = () => {
   );
 
   if (viewingSPKInDetail) return <SPKDetail spk={viewingSPKInDetail} onBack={() => setViewingSPKInDetail(null)} onReassign={() => {}} />;
-  if (viewingAsset) return <AssetDetail asset={viewingAsset} onBack={() => setViewingAsset(found => { if(found?.id === viewingAsset.id) return null; return found; })} onEdit={setAssetToEdit} onReportIssue={(a) => { setViewingAsset(null); setGlobalSearchQuery(a.id); /* This forces navigation elsewhere if needed */ }} onViewSPK={setViewingSPKInDetail} />;
+  if (viewingAsset) return <AssetDetail asset={viewingAsset} onBack={() => setViewingAsset(null)} onEdit={setAssetToEdit} onReportIssue={(a) => { setViewingAsset(null); setGlobalSearchQuery(a.id); }} onViewSPK={setViewingSPKInDetail} />;
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-6 duration-700">
@@ -264,35 +287,79 @@ const AssetList: React.FC = () => {
         </div>
       )}
 
-      {/* REGISTRATION MODAL (Same as previous but harmonized theme) */}
+      {/* REGISTRATION MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xl">
-           <div className="max-w-2xl w-full glass-card rounded-[48px] overflow-hidden border-white/10 animate-in zoom-in-95">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xl overflow-y-auto">
+           <div className="max-w-3xl w-full glass-card rounded-[48px] overflow-hidden border-white/10 animate-in zoom-in-95 my-8">
               <div className="p-10 border-b border-white/5 flex justify-between items-center">
                  <h3 className="text-2xl font-black text-white uppercase tracking-tight">Register New Asset</h3>
-                 <button onClick={() => setIsModalOpen(false)} className="p-2 text-slate-500 hover:text-white"><X className="w-8 h-8" /></button>
+                 <button onClick={() => setIsModalOpen(false)} className="p-2 text-slate-500 hover:text-white transition-colors"><X className="w-8 h-8" /></button>
               </div>
-              <form onSubmit={handleAddAsset} className="p-12 space-y-8">
+              <form onSubmit={handleAddAsset} className="p-10 md:p-12 space-y-8">
+                 {/* Image Upload Area */}
+                 <div className="space-y-4">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Asset Identity Photo</label>
+                    <div 
+                       onClick={() => assetFileInputRef.current?.click()}
+                       className={`relative group aspect-video rounded-[32px] border-2 border-dashed transition-all cursor-pointer overflow-hidden flex flex-col items-center justify-center
+                          ${newAsset.imageUrl ? 'border-blue-500/50' : 'border-white/10 hover:border-blue-500/30 bg-white/5 hover:bg-white/10'}`}
+                    >
+                       {newAsset.imageUrl ? (
+                          <>
+                             <img src={newAsset.imageUrl} className="w-full h-full object-cover" />
+                             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                <p className="text-white font-black text-xs uppercase tracking-widest">Change Image</p>
+                             </div>
+                          </>
+                       ) : (
+                          <div className="text-center space-y-4 p-8">
+                             <div className="w-16 h-16 bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-400 mx-auto transition-transform group-hover:scale-110">
+                                <Camera className="w-8 h-8" />
+                             </div>
+                             <div>
+                                <p className="text-white font-bold">Capture or Upload Photo</p>
+                                <p className="text-slate-500 text-xs mt-1">Provide visual evidence for the global ledger</p>
+                             </div>
+                          </div>
+                       )}
+                    </div>
+                    <input 
+                       ref={assetFileInputRef} 
+                       type="file" 
+                       accept="image/*" 
+                       className="hidden" 
+                       onChange={handleAssetImageChange} 
+                    />
+                 </div>
+
                  <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Asset Nomenclature</label>
-                    <input required placeholder="e.g. Cisco Nexus 9000 Switch" className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl focus:ring-4 focus:ring-blue-500/20 outline-none text-white font-bold" value={newAsset.name} onChange={e => setNewAsset({...newAsset, name: e.target.value})} />
+                    <input 
+                       required 
+                       placeholder="e.g. Cisco Nexus 9000 Switch" 
+                       className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl focus:ring-4 focus:ring-blue-500/20 outline-none text-white font-bold" 
+                       value={newAsset.name} 
+                       onChange={e => setNewAsset({...newAsset, name: e.target.value})} 
+                    />
                  </div>
-                 <div className="grid grid-cols-2 gap-8">
+
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-2">
                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Classification</label>
-                       <select className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white font-bold outline-none" value={newAsset.category} onChange={e => setNewAsset({...newAsset, category: e.target.value})}>
+                       <select className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white font-bold outline-none appearance-none" value={newAsset.category} onChange={e => setNewAsset({...newAsset, category: e.target.value})}>
                           {categories.map(c => <option key={c} value={c} className="bg-slate-900">{c}</option>)}
                        </select>
                     </div>
                     <div className="space-y-2">
                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Deployment Zone</label>
-                       <select className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white font-bold outline-none" value={newAsset.location} onChange={e => setNewAsset({...newAsset, location: e.target.value})}>
+                       <select className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl text-white font-bold outline-none appearance-none" value={newAsset.location} onChange={e => setNewAsset({...newAsset, location: e.target.value})}>
                           {locations.map(l => <option key={l} value={l} className="bg-slate-900">{l}</option>)}
                        </select>
                     </div>
                  </div>
+
                  <div className="pt-8 flex gap-4">
-                    <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-5 bg-white/5 text-slate-400 font-black rounded-2xl hover:bg-white/10">Abort</button>
+                    <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-5 bg-white/5 text-slate-400 font-black rounded-2xl hover:bg-white/10 transition-colors">Abort</button>
                     <button type="submit" className="flex-[2] py-5 bg-blue-600 text-white font-black rounded-2xl shadow-xl shadow-blue-500/20 hover:bg-blue-500 active:scale-95 transition-all">Authorize Registration</button>
                  </div>
               </form>

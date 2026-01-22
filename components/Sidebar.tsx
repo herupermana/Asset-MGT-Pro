@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, Box, ClipboardList, PenTool, Mic, Settings, LogOut, Users, FileText } from 'lucide-react';
+import { LayoutDashboard, Box, ClipboardList, PenTool, Mic, Settings, LogOut, Users, FileText, ChevronRight } from 'lucide-react';
 import { useApp } from '../AppContext';
 
 interface SidebarProps {
@@ -10,53 +10,62 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onExit }) => {
+  const { t } = useApp();
+  
   const menuItems = [
-    { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { id: 'assets', icon: Box, label: 'Assets' },
-    { id: 'spk', icon: ClipboardList, label: 'SPK & Repair' },
-    { id: 'technicians', icon: Users, label: 'Personnel' },
-    { id: 'reports', icon: FileText, label: 'Reports' },
-    { id: 'settings', icon: Settings, label: 'Settings' },
-    { id: 'image-ai', icon: PenTool, label: 'Image AI' },
-    { id: 'voice-ai', icon: Mic, label: 'Voice AI' },
+    { id: 'dashboard', icon: LayoutDashboard, label: t('dashboard') },
+    { id: 'assets', icon: Box, label: t('assets') },
+    { id: 'spk', icon: ClipboardList, label: t('spk') },
+    { id: 'technicians', icon: Users, label: t('personnel') },
+    { id: 'reports', icon: FileText, label: t('reports') },
+    { id: 'settings', icon: Settings, label: t('settings') },
+    { id: 'image-ai', icon: PenTool, label: t('image_ai') },
+    { id: 'voice-ai', icon: Mic, label: t('voice_ai') },
   ];
 
   return (
-    <div className="w-64 glass-card h-screen border-r-0 flex flex-col fixed left-0 top-0 no-print z-30">
-      <div className="p-8 flex items-center gap-4">
-        <div className="bg-blue-600/20 p-2.5 rounded-2xl border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.3)]">
-          <Box className="text-blue-400 w-6 h-6" />
+    <div className="w-64 glass-card h-screen border-r border-white/5 flex flex-col fixed left-0 top-0 no-print z-30">
+      <div className="p-8 pb-10">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-blue-600 rounded-[12px] flex items-center justify-center shadow-[0_0_20px_rgba(59,130,246,0.4)]">
+            <Box className="text-white w-6 h-6" />
+          </div>
+          <div>
+            <h1 className="text-lg font-black text-white tracking-tighter uppercase leading-none">Asset<span className="text-blue-500">Pro</span></h1>
+            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mt-1">Enterprise v2.5</p>
+          </div>
         </div>
-        <h1 className="text-xl font-extrabold text-white tracking-tight uppercase">Asset<span className="text-blue-500">Pro</span></h1>
       </div>
       
-      <nav className="flex-1 p-4 space-y-2 mt-2">
+      <nav className="flex-1 px-3 space-y-1">
         {menuItems.map((item) => (
           <button
             key={item.id}
             onClick={() => setActiveTab(item.id)}
-            className={`w-full flex items-center gap-4 px-5 py-3.5 rounded-2xl transition-all duration-300 relative group overflow-hidden ${
+            className={`w-full flex items-center justify-between px-5 py-3 rounded-xl transition-all duration-300 group ${
               activeTab === item.id
-                ? 'bg-blue-600/20 text-white font-bold border border-blue-500/30 shadow-[0_0_20px_rgba(59,130,246,0.1)]'
-                : 'text-slate-400 hover:text-white hover:bg-white/5'
+                ? 'bg-blue-600/10 text-white border border-blue-500/20 shadow-sm'
+                : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
             }`}
           >
-            {activeTab === item.id && (
-              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-blue-500 rounded-r-full shadow-[0_0_10px_#3b82f6]" />
-            )}
-            <item.icon className={`w-5 h-5 transition-colors ${activeTab === item.id ? 'text-blue-400' : 'text-slate-500 group-hover:text-blue-300'}`} />
-            <span className="text-sm tracking-wide">{item.label}</span>
+            <div className="flex items-center gap-4">
+              <item.icon className={`w-4.5 h-4.5 transition-colors ${activeTab === item.id ? 'text-blue-500' : 'text-slate-600 group-hover:text-slate-400'}`} />
+              <span className={`text-xs font-bold uppercase tracking-widest ${activeTab === item.id ? 'opacity-100' : 'opacity-70 group-hover:opacity-100'}`}>
+                {item.label}
+              </span>
+            </div>
+            {activeTab === item.id && <ChevronRight className="w-3.5 h-3.5 text-blue-500" />}
           </button>
         ))}
       </nav>
 
-      <div className="p-6 space-y-2">
+      <div className="p-6 border-t border-white/5">
         <button 
           onClick={onExit}
-          className="w-full flex items-center gap-4 px-5 py-3.5 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-2xl transition-all font-bold group border border-transparent hover:border-rose-500/20"
+          className="w-full flex items-center gap-4 px-5 py-3 text-slate-500 hover:text-rose-500 hover:bg-rose-500/5 rounded-xl transition-all font-black text-[10px] uppercase tracking-[0.2em] group"
         >
-          <LogOut className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
-          <span className="text-sm">Exit Terminal</span>
+          <LogOut className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
+          {t('exit_terminal')}
         </button>
       </div>
     </div>

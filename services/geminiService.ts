@@ -45,8 +45,21 @@ class GeminiService {
   private ai: GoogleGenAI;
 
   constructor() {
-    // Initializing with direct process.env.API_KEY as per guidelines
     this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+  }
+
+  // Gemini 3 Flash for fast text tasks (Translation)
+  async translateText(text: string, targetLanguage: string): Promise<string | null> {
+    try {
+      const response = await this.ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `Translate the following technical asset management text into ${targetLanguage}. Keep technical IDs as they are. Return ONLY the translated text: "${text}"`,
+      });
+      return response.text?.trim() || null;
+    } catch (error) {
+      console.error("Translation failed:", error);
+      return null;
+    }
   }
 
   // Gemini 2.5 Flash Image for Editing
@@ -69,7 +82,6 @@ class GeminiService {
         },
       });
 
-      // Iterating through parts to find the image part as per guidelines
       for (const part of response.candidates?.[0]?.content?.parts || []) {
         if (part.inlineData) {
           return `data:${mimeType};base64,${part.inlineData.data}`;
@@ -96,18 +108,13 @@ class GeminiService {
       callbacks: {
         onopen: () => callbacks.onOpen?.(),
         onmessage: async (message: LiveServerMessage) => {
-          // Handle Audio Data - passing raw base64 to component to avoid cross-AudioContext issues
           const base64Audio = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
           if (base64Audio && callbacks.onAudioData) {
             callbacks.onAudioData(base64Audio);
           }
-
-          // Handle interruption signal (barge-in)
           if (message.serverContent?.interrupted) {
             callbacks.onInterrupted?.();
           }
-
-          // Handle Transcriptions
           if (message.serverContent?.outputTranscription) {
             callbacks.onTranscription?.(message.serverContent.outputTranscription.text, false);
           } else if (message.serverContent?.inputTranscription) {

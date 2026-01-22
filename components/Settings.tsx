@@ -1,109 +1,89 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../AppContext';
 import BackupRestore from './BackupRestore';
 import { 
   Settings as SettingsIcon, User, Shield, 
   Layers, MapPin, Plus, Trash2, Save, 
-  Moon, Sun, Bell, Globe, Database, 
+  Moon, Sun, Globe, Database, 
   Smartphone, Monitor, RefreshCw, X, Check,
-  History, Loader2
+  History, Loader2, Languages, Sparkles, Server, Network, 
+  Activity, CloudUpload, ShieldCheck
 } from 'lucide-react';
 
 const SettingsView: React.FC = () => {
   const { 
     categories, addCategory, removeCategory, 
-    locations, addLocation, removeLocation 
+    locations, addLocation, removeLocation,
+    theme, setTheme, language, setLanguage,
+    isAutoTranslateEnabled, setAutoTranslate,
+    storageMode, setStorageMode, setDbEndpoint, isDbConnected
   } = useApp();
 
-  const [activeSection, setActiveSection] = useState<'system' | 'profile' | 'appearance' | 'governance'>('system');
+  const [activeSection, setActiveSection] = useState<'system' | 'appearance' | 'infrastructure' | 'governance'>('system');
   const [newCatName, setNewCatName] = useState('');
   const [newLocName, setNewLocName] = useState('');
-  const [showToast, setShowToast] = useState(false);
-  const [isReloading, setIsReloading] = useState(false);
+  const [dbUrl, setDbUrl] = useState(localStorage.getItem('ap_sql_endpoint') || 'http://localhost:3000/api');
+  const [isSaving, setIsSaving] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
 
-  const triggerSave = () => {
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 3000);
-  };
-
-  const handleReload = () => {
-    setIsReloading(true);
+  const handleGlobalSave = () => {
+    setIsSaving(true);
+    // Simulate sync
     setTimeout(() => {
-      setIsReloading(false);
-      window.location.reload();
-    }, 1200);
+      setDbEndpoint(dbUrl);
+      setIsSaving(false);
+      setHasUnsavedChanges(false);
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
+    }, 800);
   };
 
-  const handleAddCategory = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newCatName.trim()) {
-      addCategory(newCatName.trim());
-      setNewCatName('');
+  useEffect(() => {
+    if (dbUrl !== (localStorage.getItem('ap_sql_endpoint') || 'http://localhost:3000/api')) {
+      setHasUnsavedChanges(true);
     }
-  };
+  }, [dbUrl]);
 
-  const handleAddLocation = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newLocName.trim()) {
-      addLocation(newLocName.trim());
-      setNewLocName('');
-    }
-  };
-
-  const renderSection = () => {
+  const renderSectionContent = () => {
     switch (activeSection) {
-      case 'governance':
-        return (
-          <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-             <div className="bg-slate-900 p-8 rounded-[40px] text-white relative overflow-hidden mb-4">
-                <div className="absolute top-0 right-0 p-8 opacity-10">
-                   <Shield className="w-32 h-32" />
-                </div>
-                <h3 className="text-xl font-black mb-2">Data Governance</h3>
-                <p className="text-slate-400 text-sm max-w-md">Manage the integrity of the enterprise ledger. Use these tools to perform routine snapshots or emergency restorations.</p>
-             </div>
-             <BackupRestore />
-          </div>
-        );
       case 'system':
         return (
-          <div className="space-y-10 animate-in fade-in slide-in-from-right-4 duration-300">
-            {/* Categories Management */}
+          <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* Categories */}
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-purple-50 rounded-xl text-purple-600">
-                    <Layers className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-slate-800">Asset Categories</h3>
-                    <p className="text-xs text-slate-400 font-medium">Define classification for physical inventory</p>
-                  </div>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500">
+                  <Layers className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-white uppercase tracking-tight">Classification Matrix</h3>
+                  <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Asset Category Definitions</p>
                 </div>
               </div>
               
-              <div className="bg-slate-50/50 p-6 rounded-[32px] border border-slate-100 space-y-4">
-                <form onSubmit={handleAddCategory} className="flex gap-3">
+              <div className="glass-card p-8 rounded-[32px] border-white/5 space-y-6">
+                <div className="flex gap-3">
                   <input 
-                    placeholder="New category name..." 
-                    className="flex-1 px-5 py-3 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-purple-100 transition-all font-medium text-sm"
+                    placeholder="New classification..." 
+                    className="flex-1 px-6 py-4 rounded-2xl outline-none text-white font-bold text-sm"
                     value={newCatName}
                     onChange={e => setNewCatName(e.target.value)}
                   />
-                  <button type="submit" className="bg-slate-900 text-white px-5 py-3 rounded-2xl hover:bg-slate-800 transition-all active:scale-95 shadow-lg shadow-slate-200">
-                    <Plus className="w-5 h-5" />
+                  <button 
+                    onClick={() => { if(newCatName.trim()){ addCategory(newCatName.trim()); setNewCatName(''); setHasUnsavedChanges(true); } }}
+                    className="px-6 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+                  >
+                    Add
                   </button>
-                </form>
+                </div>
                 
-                <div className="flex flex-wrap gap-2 pt-2">
+                <div className="flex flex-wrap gap-2">
                   {categories.map(cat => (
-                    <div key={cat} className="group flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl hover:border-purple-300 hover:shadow-sm transition-all">
-                      <span className="text-xs font-bold text-slate-600">{cat}</span>
-                      <button 
-                        onClick={() => removeCategory(cat)}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-slate-300 hover:text-rose-500 transition-all"
-                      >
+                    <div key={cat} className="group flex items-center gap-3 px-4 py-2 bg-white/5 border border-white/5 rounded-xl hover:border-blue-500/30 transition-all">
+                      <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{cat}</span>
+                      <button onClick={() => { removeCategory(cat); setHasUnsavedChanges(true); }} className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-rose-500 transition-all">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -112,219 +92,253 @@ const SettingsView: React.FC = () => {
               </div>
             </div>
 
-            {/* Location Management */}
+            {/* Locations */}
             <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-emerald-50 rounded-xl text-emerald-600">
-                    <MapPin className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-slate-800">Physical Locations</h3>
-                    <p className="text-xs text-slate-400 font-medium">Manage operational sites and storage areas</p>
-                  </div>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                  <MapPin className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-white uppercase tracking-tight">Deployment Zones</h3>
+                  <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Global Asset Locations</p>
                 </div>
               </div>
               
-              <div className="bg-slate-50/50 p-6 rounded-[32px] border border-slate-100 space-y-4">
-                <form onSubmit={handleAddLocation} className="flex gap-3">
+              <div className="glass-card p-8 rounded-[32px] border-white/5 space-y-6">
+                <div className="flex gap-3">
                   <input 
                     placeholder="New site location..." 
-                    className="flex-1 px-5 py-3 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-emerald-100 transition-all font-medium text-sm"
+                    className="flex-1 px-6 py-4 rounded-2xl outline-none text-white font-bold text-sm"
                     value={newLocName}
                     onChange={e => setNewLocName(e.target.value)}
                   />
-                  <button type="submit" className="bg-slate-900 text-white px-5 py-3 rounded-2xl hover:bg-slate-800 transition-all active:scale-95 shadow-lg shadow-slate-200">
-                    <Plus className="w-5 h-5" />
+                  <button 
+                    onClick={() => { if(newLocName.trim()){ addLocation(newLocName.trim()); setNewLocName(''); setHasUnsavedChanges(true); } }}
+                    className="px-6 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
+                  >
+                    Add
                   </button>
-                </form>
+                </div>
                 
-                <div className="flex flex-wrap gap-2 pt-2">
+                <div className="flex flex-wrap gap-2">
                   {locations.map(loc => (
-                    <div key={loc} className="group flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl hover:border-emerald-300 hover:shadow-sm transition-all">
-                      <span className="text-xs font-bold text-slate-600">{loc}</span>
-                      <button 
-                        onClick={() => removeLocation(loc)}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-slate-300 hover:text-rose-500 transition-all"
-                      >
+                    <div key={loc} className="group flex items-center gap-3 px-4 py-2 bg-white/5 border border-white/5 rounded-xl hover:border-emerald-500/30 transition-all">
+                      <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{loc}</span>
+                      <button onClick={() => { removeLocation(loc); setHasUnsavedChanges(true); }} className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-rose-500 transition-all">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   ))}
                 </div>
-              </div>
-            </div>
-          </div>
-        );
-      case 'profile':
-        return (
-          <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
-            <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm space-y-8">
-              <div className="flex flex-col items-center text-center space-y-4">
-                 <div className="w-24 h-24 bg-blue-600 rounded-[32px] flex items-center justify-center text-white text-3xl font-black shadow-xl shadow-blue-200 relative group cursor-pointer">
-                    A
-                    <div className="absolute inset-0 bg-black/40 rounded-[32px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <Smartphone className="w-6 h-6 text-white" />
-                    </div>
-                 </div>
-                 <div>
-                   <h3 className="text-xl font-black text-slate-800">System Administrator</h3>
-                   <p className="text-sm text-slate-400 font-bold uppercase tracking-widest mt-1">Master Access Node</p>
-                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
-                 <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-1">Display Name</label>
-                    <input defaultValue="Administrator" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-blue-100 transition-all font-bold text-slate-700" />
-                 </div>
-                 <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-1">Email Endpoint</label>
-                    <input defaultValue="admin@assetpro.ai" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-blue-100 transition-all font-bold text-slate-700" />
-                 </div>
-              </div>
-
-              <div className="pt-6 border-t border-slate-50 flex justify-end">
-                <button onClick={triggerSave} className="bg-blue-600 text-white px-8 py-3.5 rounded-2xl font-black text-sm flex items-center gap-2 hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 active:scale-95">
-                  <Save className="w-4 h-4" />
-                  Sync Credentials
-                </button>
               </div>
             </div>
           </div>
         );
       case 'appearance':
         return (
-          <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <button className="p-8 bg-white border-4 border-blue-600 rounded-[40px] text-left shadow-xl shadow-blue-50/50 space-y-4">
-                <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
-                  <Sun className="w-6 h-6" />
-                </div>
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="grid grid-cols-2 gap-6">
+              <button 
+                onClick={() => { setTheme('light'); setHasUnsavedChanges(true); }}
+                className={`p-10 rounded-[40px] border-2 text-left transition-all space-y-4 ${theme === 'light' ? 'bg-white border-blue-600 text-slate-900' : 'bg-white/5 border-transparent text-slate-500 hover:bg-white/10'}`}
+              >
+                <Sun className={`w-8 h-8 ${theme === 'light' ? 'text-blue-600' : 'text-slate-600'}`} />
                 <div>
-                  <p className="font-black text-slate-800">Light Protocol</p>
-                  <p className="text-xs text-slate-400 font-medium">Standard enterprise clarity</p>
-                </div>
-                <div className="pt-2">
-                  <div className="bg-blue-600 text-white w-fit px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">Active Mode</div>
+                  <h4 className="font-black uppercase tracking-widest text-sm">Light Interface</h4>
+                  <p className="text-xs opacity-70 mt-1">Maximum visibility for field operations.</p>
                 </div>
               </button>
-
-              <button className="p-8 bg-slate-900 border-4 border-transparent hover:border-slate-700 rounded-[40px] text-left space-y-4 transition-all">
-                <div className="w-12 h-12 bg-white/5 text-slate-400 rounded-2xl flex items-center justify-center">
-                  <Moon className="w-6 h-6" />
-                </div>
+              <button 
+                onClick={() => { setTheme('dark'); setHasUnsavedChanges(true); }}
+                className={`p-10 rounded-[40px] border-2 text-left transition-all space-y-4 ${theme === 'dark' ? 'bg-slate-900 border-blue-600 text-white' : 'bg-white/5 border-transparent text-slate-500 hover:bg-white/10'}`}
+              >
+                <Moon className={`w-8 h-8 ${theme === 'dark' ? 'text-blue-400' : 'text-slate-600'}`} />
                 <div>
-                  <p className="font-black text-white">Dark Protocol</p>
-                  <p className="text-xs text-slate-500 font-medium">Low-light maintenance mode</p>
+                  <h4 className="font-black uppercase tracking-widest text-sm">Dark Interface</h4>
+                  <p className="text-xs opacity-70 mt-1">High-contrast specialized command view.</p>
                 </div>
               </button>
             </div>
 
-            <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm space-y-6">
-               <h3 className="font-black text-slate-800 flex items-center gap-3">
-                 <Monitor className="w-5 h-5 text-slate-400" />
-                 Display Configurations
-               </h3>
-               <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
-                    <div className="flex items-center gap-3">
-                       <Smartphone className="w-4 h-4 text-slate-400" />
-                       <span className="text-sm font-bold text-slate-700">Compact View Mode</span>
-                    </div>
-                    <div className="w-12 h-6 bg-slate-200 rounded-full relative cursor-not-allowed">
-                       <div className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full" />
-                    </div>
+            <div className="glass-card p-10 rounded-[48px] border-white/5 space-y-8">
+              <div className="flex items-center gap-4">
+                <Globe className="w-6 h-6 text-blue-500" />
+                <h4 className="text-xl font-black text-white uppercase">Regional Sync</h4>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                {['en', 'id'].map(l => (
+                  <button 
+                    key={l}
+                    onClick={() => { setLanguage(l as any); setHasUnsavedChanges(true); }}
+                    className={`p-5 rounded-2xl border-2 font-black text-xs uppercase tracking-widest transition-all ${language === l ? 'bg-blue-600/10 border-blue-600 text-white' : 'bg-white/5 border-transparent text-slate-500 hover:bg-white/10'}`}
+                  >
+                    {l === 'en' ? 'English - Global' : 'Bahasa Indonesia'}
+                  </button>
+                ))}
+              </div>
+              
+              <div className="flex items-center justify-between p-6 bg-white/5 rounded-3xl border border-white/5">
+                <div className="flex items-center gap-4">
+                  <div className={`p-3 rounded-xl ${isAutoTranslateEnabled ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 text-slate-600'}`}>
+                    <Sparkles className="w-5 h-5" />
                   </div>
-                  <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
-                    <div className="flex items-center gap-3">
-                       <Globe className="w-4 h-4 text-slate-400" />
-                       <span className="text-sm font-bold text-slate-700">Auto-Translation (Multi-lang)</span>
-                    </div>
-                    <div className="w-12 h-6 bg-blue-600 rounded-full relative">
-                       <div className="absolute right-1 top-1 w-4 h-4 bg-white rounded-full shadow-sm" />
-                    </div>
+                  <div>
+                    <p className="text-sm font-black text-white uppercase tracking-tight">AI Content translation</p>
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">Use Gemini to localize asset data</p>
                   </div>
-               </div>
+                </div>
+                <button 
+                  onClick={() => { setAutoTranslate(!isAutoTranslateEnabled); setHasUnsavedChanges(true); }}
+                  className={`w-14 h-8 rounded-full relative transition-all ${isAutoTranslateEnabled ? 'bg-blue-600' : 'bg-slate-800'}`}
+                >
+                  <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${isAutoTranslateEnabled ? 'right-1' : 'left-1'}`} />
+                </button>
+              </div>
             </div>
           </div>
         );
+      case 'infrastructure':
+        return (
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="grid grid-cols-2 gap-6">
+              <button 
+                onClick={() => { setStorageMode('local'); setHasUnsavedChanges(true); }}
+                className={`p-10 rounded-[40px] border-2 text-left transition-all space-y-4 ${storageMode === 'local' ? 'bg-blue-600/10 border-blue-600' : 'bg-white/5 border-transparent hover:bg-white/10'}`}
+              >
+                <Smartphone className="w-10 h-10 text-blue-500" />
+                <div>
+                  <h4 className="text-lg font-black text-white uppercase">Local Storage</h4>
+                  <p className="text-xs text-slate-500 font-bold mt-1">Data persists in local browser cache</p>
+                </div>
+              </button>
+              <button 
+                onClick={() => { setStorageMode('sql_remote'); setHasUnsavedChanges(true); }}
+                className={`p-10 rounded-[40px] border-2 text-left transition-all space-y-4 ${storageMode === 'sql_remote' ? 'bg-blue-600/10 border-blue-600' : 'bg-white/5 border-transparent hover:bg-white/10'}`}
+              >
+                <Server className="w-10 h-10 text-indigo-500" />
+                <div>
+                  <h4 className="text-lg font-black text-white uppercase">SQL Bridge</h4>
+                  <p className="text-xs text-slate-500 font-bold mt-1">Connect to MySQL via External API</p>
+                </div>
+              </button>
+            </div>
+
+            {storageMode === 'sql_remote' && (
+              <div className="glass-card p-10 rounded-[48px] border-white/5 space-y-8 animate-in zoom-in-95">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xl font-black text-white uppercase">API Connectivity</h4>
+                  <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${isDbConnected ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-rose-500/10 text-rose-500 border-rose-500/20'}`}>
+                    <Activity className={`w-3.5 h-3.5 ${isDbConnected ? 'animate-pulse' : ''}`} />
+                    {isDbConnected ? 'Node Online' : 'Node Disconnected'}
+                  </div>
+                </div>
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Remote REST Endpoint</label>
+                    <input 
+                      className="w-full px-6 py-4 rounded-2xl outline-none text-white font-bold"
+                      value={dbUrl}
+                      onChange={(e) => setDbUrl(e.target.value)}
+                    />
+                  </div>
+                  <div className="p-6 bg-blue-500/5 border border-blue-500/10 rounded-3xl text-sm text-slate-400 font-medium">
+                    <p className="flex items-center gap-2 text-blue-400 font-black uppercase text-[10px] tracking-widest mb-2"><Network className="w-4 h-4" />Integration Note</p>
+                    Your external node must support JSON REST protocols. Ensure the SQL bridge is active before committing large datasets.
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      case 'governance':
+        return <BackupRestore />;
     }
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8 pb-20">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="bg-slate-900 p-3 rounded-2xl shadow-xl shadow-slate-200">
-            <SettingsIcon className="text-white w-8 h-8" />
+    <div className="max-w-6xl mx-auto pb-32">
+      <div className="flex items-center justify-between mb-12">
+        <div className="flex items-center gap-6">
+          <div className="w-16 h-16 bg-slate-900 rounded-[24px] flex items-center justify-center text-blue-500 shadow-xl border border-white/5">
+            <SettingsIcon className="w-8 h-8" />
           </div>
           <div>
-            <h2 className="text-3xl font-black text-slate-800 tracking-tight">System Control</h2>
-            <p className="text-slate-500 font-medium">Configure enterprise operational parameters</p>
+            <h2 className="text-4xl font-black text-white tracking-tighter uppercase text-glow-blue">System <span className="text-blue-500">Architecture</span></h2>
+            <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mt-1">Configure global operational parameters</p>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
-        {/* Navigation Sidebar */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
         <div className="lg:col-span-3 space-y-2">
-           {[
-             { id: 'system', icon: Database, label: 'Asset Core' },
-             { id: 'profile', icon: User, label: 'Account Identity' },
-             { id: 'governance', icon: History, label: 'Data Governance' },
-             { id: 'appearance', icon: Monitor, label: 'Interface' },
-           ].map(item => (
-             <button
-               key={item.id}
-               onClick={() => setActiveSection(item.id as any)}
-               className={`w-full flex items-center gap-3 px-6 py-4 rounded-[20px] font-black text-sm transition-all border-2
-                 ${activeSection === item.id 
-                   ? 'bg-white border-slate-900 text-slate-900 shadow-xl shadow-slate-100' 
-                   : 'bg-transparent border-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
-             >
-               <item.icon className={`w-5 h-5 ${activeSection === item.id ? 'text-blue-600' : ''}`} />
-               {item.label}
-             </button>
-           ))}
+          {[
+            { id: 'system', icon: Database, label: 'Asset Core' },
+            { id: 'appearance', icon: Monitor, label: 'Interface' },
+            { id: 'infrastructure', icon: Server, label: 'Infrastructure' },
+            { id: 'governance', icon: ShieldCheck, label: 'Data Security' },
+          ].map(item => (
+            <button
+              key={item.id}
+              onClick={() => setActiveSection(item.id as any)}
+              className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all border ${
+                activeSection === item.id 
+                  ? 'bg-blue-600 text-white border-blue-500 shadow-xl shadow-blue-500/10' 
+                  : 'bg-white/5 border-transparent text-slate-500 hover:text-slate-300 hover:bg-white/10'}`}
+            >
+              <item.icon className="w-4.5 h-4.5" />
+              {item.label}
+            </button>
+          ))}
         </div>
 
-        {/* Content Area */}
         <div className="lg:col-span-9">
-          {renderSection()}
+          {renderSectionContent()}
         </div>
       </div>
 
-      <div className="mt-12 p-8 rounded-[40px] bg-slate-900 text-white relative overflow-hidden">
-        <div className="absolute top-0 right-0 p-10 opacity-5">
-           <Shield className="w-64 h-64" />
+      {/* FIXED SAVE BUTTON (Floating Bar) */}
+      {(hasUnsavedChanges || isSaving) && (
+        <div className="fixed bottom-10 right-10 left-[256px] flex justify-center z-[60] animate-in slide-in-from-bottom-10 duration-500 no-print">
+          <div className="glass-card px-10 py-5 rounded-[40px] border-blue-500/30 flex items-center gap-12 shadow-2xl shadow-blue-500/20">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-500">
+                <CloudUpload className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-sm font-black text-white uppercase tracking-tight">Unsaved Configurations</p>
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Changes detected in active session</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => window.location.reload()}
+                className="px-6 py-3 text-[10px] font-black uppercase text-slate-500 hover:text-white transition-all"
+              >
+                Discard
+              </button>
+              <button 
+                onClick={handleGlobalSave}
+                disabled={isSaving}
+                className="bg-blue-600 hover:bg-blue-500 text-white px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-blue-500/40 flex items-center gap-3 transition-all active:scale-95 disabled:opacity-50"
+              >
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {isSaving ? 'Syncing...' : 'Save All Changes'}
+              </button>
+            </div>
+          </div>
         </div>
-        <div className="relative z-10 space-y-4 max-w-xl">
-           <h4 className="text-xl font-black">Technical Support & Diagnostics</h4>
-           <p className="text-slate-400 text-sm leading-relaxed font-medium">
-             Need to integrate with external ERP systems or reset your enterprise ledger? Contact your organization's IT lead for API token provisioning or database snapshots.
-           </p>
-           <button 
-            disabled={isReloading}
-            onClick={handleReload}
-            className="flex items-center gap-2 text-blue-400 font-black text-xs uppercase tracking-widest pt-4 hover:text-blue-300 transition-colors disabled:opacity-50"
-          >
-             {isReloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-             Reload Global Ledger
-           </button>
-        </div>
-      </div>
+      )}
 
-      {/* Save Toast */}
-      {showToast && (
-        <div className="fixed bottom-10 right-10 z-[100] bg-slate-900 text-white px-6 py-4 rounded-[24px] shadow-2xl flex items-center gap-4 animate-in slide-in-from-bottom-10">
-           <div className="bg-emerald-50 p-1 rounded-full">
-             <Check className="w-4 h-4 text-white" />
-           </div>
-           <p className="text-sm font-bold">Configurations synced successfully</p>
-           <button onClick={() => setShowToast(false)} className="ml-2 opacity-50 hover:opacity-100">
-             <X className="w-4 h-4" />
-           </button>
+      {/* Success Notification */}
+      {showSuccess && (
+        <div className="fixed top-10 right-10 z-[100] glass-card px-6 py-4 rounded-2xl border-emerald-500/30 flex items-center gap-4 animate-in slide-in-from-right-10">
+          <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white">
+            <Check className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-sm font-black text-white uppercase">Sync Complete</p>
+            <p className="text-[10px] text-slate-500 font-bold uppercase">System state updated successfully</p>
+          </div>
         </div>
       )}
     </div>
