@@ -3,6 +3,13 @@ import { Asset, SPK, Technician } from '../types';
 
 export type StorageMode = 'local' | 'sql_remote';
 
+export interface DbStats {
+  assetCount: number;
+  spkCount: number;
+  techCount: number;
+  lastSync: string;
+}
+
 class ApiService {
   private mode: StorageMode = (localStorage.getItem('ap_storage_mode') as StorageMode) || 'local';
   private apiBaseUrl: string = localStorage.getItem('ap_sql_endpoint') || 'http://localhost:3000/api';
@@ -19,6 +26,36 @@ class ApiService {
 
   getMode(): StorageMode {
     return this.mode;
+  }
+
+  getEndpoint(): string {
+    return this.apiBaseUrl;
+  }
+
+  // --- TELEMETRY & STATS ---
+  async fetchDbStats(): Promise<DbStats> {
+    if (this.mode === 'local') {
+      const a = JSON.parse(localStorage.getItem('ap_assets') || '[]');
+      const s = JSON.parse(localStorage.getItem('ap_spks') || '[]');
+      const t = JSON.parse(localStorage.getItem('ap_technicians') || '[]');
+      return { assetCount: a.length, spkCount: s.length, techCount: t.length, lastSync: 'Local only' };
+    }
+    const response = await fetch(`${this.apiBaseUrl}/stats`);
+    if (!response.ok) throw new Error('Could not retrieve remote stats');
+    return response.json();
+  }
+
+  // --- MIGRATION ENGINE ---
+  async migrateToRemote(data: { assets: Asset[], spks: SPK[], technicians: Technician[] }): Promise<void> {
+    const response = await fetch(`${this.apiBaseUrl}/migrate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(err || 'Migration Protocol Rejected');
+    }
   }
 
   // --- ASSETS ---
