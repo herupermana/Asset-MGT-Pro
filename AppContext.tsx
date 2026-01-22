@@ -10,6 +10,7 @@ interface AppContextType {
   categories: string[];
   globalSearchQuery: string;
   currentTechnician: Technician | null;
+  isAdminLoggedIn: boolean;
   setGlobalSearchQuery: (query: string) => void;
   addAsset: (asset: Asset) => void;
   updateAsset: (asset: Asset) => void;
@@ -21,7 +22,9 @@ interface AppContextType {
   updateSPKStatus: (id: string, status: SPKStatus, note?: string) => void;
   updateAssetStatus: (id: string, status: AssetStatus) => void;
   loginTechnician: (id: string) => Promise<boolean>;
+  loginAdmin: (password: string) => Promise<boolean>;
   logout: () => void;
+  logoutAdmin: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -33,6 +36,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
   const [currentTechnician, setCurrentTechnician] = useState<Technician | null>(null);
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
 
   const addAsset = (asset: Asset) => setAssets(prev => [asset, ...prev]);
 
@@ -113,7 +117,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
   };
 
+  const loginAdmin = async (password: string): Promise<boolean> => {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        if (password === 'admin123') {
+          setIsAdminLoggedIn(true);
+          resolve(true);
+        } else {
+          resolve(false);
+        }
+      }, 800);
+    });
+  };
+
   const logout = () => setCurrentTechnician(null);
+  const logoutAdmin = () => setIsAdminLoggedIn(false);
 
   return (
     <AppContext.Provider value={{ 
@@ -123,6 +141,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       categories,
       globalSearchQuery,
       currentTechnician,
+      isAdminLoggedIn,
       setGlobalSearchQuery,
       addAsset, 
       updateAsset,
@@ -134,7 +153,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       updateSPKStatus, 
       updateAssetStatus,
       loginTechnician,
-      logout
+      loginAdmin,
+      logout,
+      logoutAdmin
     }}>
       {children}
     </AppContext.Provider>
