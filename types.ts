@@ -46,6 +46,7 @@ export interface SPK {
   dueDate: string;
   completedAt?: string;
   completionNote?: string;
+  evidence?: string[]; // New field for photo evidence
 }
 
 export interface ConversationMessage {

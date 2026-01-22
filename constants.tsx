@@ -65,3 +65,13 @@ export const DEFAULT_CATEGORIES = [
   'Safety Gear',
   'Manufacturing'
 ];
+
+export const DEFAULT_LOCATIONS = [
+  'Data Center Room A',
+  'Rooftop Section 4',
+  'Meeting Room 2',
+  'Warehouse A',
+  'Main Office',
+  'Server Room 1',
+  'Loading Dock'
+];

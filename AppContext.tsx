@@ -1,13 +1,14 @@
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { Asset, SPK, Technician, AssetStatus, SPKStatus } from './types';
-import { MOCK_ASSETS, MOCK_SPKS, MOCK_TECHNICIANS, DEFAULT_CATEGORIES } from './constants';
+import { MOCK_ASSETS, MOCK_SPKS, MOCK_TECHNICIANS, DEFAULT_CATEGORIES, DEFAULT_LOCATIONS } from './constants';
 
 interface AppContextType {
   assets: Asset[];
   spks: SPK[];
   technicians: Technician[];
   categories: string[];
+  locations: string[];
   globalSearchQuery: string;
   currentTechnician: Technician | null;
   isAdminLoggedIn: boolean;
@@ -17,9 +18,11 @@ interface AppContextType {
   deleteAsset: (id: string) => void;
   addCategory: (category: string) => void;
   removeCategory: (category: string) => void;
+  addLocation: (location: string) => void;
+  removeLocation: (location: string) => void;
   createSPK: (spk: SPK) => void;
   reassignSPK: (spkId: string, newTechnicianId: string) => void;
-  updateSPKStatus: (id: string, status: SPKStatus, note?: string) => void;
+  updateSPKStatus: (id: string, status: SPKStatus, note?: string, evidence?: string[]) => void;
   updateAssetStatus: (id: string, status: AssetStatus) => void;
   loginTechnician: (id: string, password: string) => Promise<boolean>;
   loginAdmin: (password: string) => Promise<boolean>;
@@ -37,6 +40,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [spks, setSpks] = useState<SPK[]>(MOCK_SPKS);
   const [technicians, setTechnicians] = useState<Technician[]>(MOCK_TECHNICIANS);
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
+  const [locations, setLocations] = useState<string[]>(DEFAULT_LOCATIONS);
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
   const [currentTechnician, setCurrentTechnician] = useState<Technician | null>(null);
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
@@ -61,6 +65,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setCategories(prev => prev.filter(c => c !== category));
   };
 
+  const addLocation = (location: string) => {
+    if (!locations.includes(location)) {
+      setLocations(prev => [...prev, location].sort());
+    }
+  };
+
+  const removeLocation = (location: string) => {
+    setLocations(prev => prev.filter(l => l !== location));
+  };
+
   const createSPK = (spk: SPK) => {
     setSpks(prev => [spk, ...prev]);
     setTechnicians(prev => prev.map(t => 
@@ -82,7 +96,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setSpks(prev => prev.map(s => s.id === spkId ? { ...s, technicianId: newTechnicianId } : s));
   };
 
-  const updateSPKStatus = (id: string, status: SPKStatus, note?: string) => {
+  const updateSPKStatus = (id: string, status: SPKStatus, note?: string, evidence?: string[]) => {
     setSpks(prev => prev.map(s => {
       if (s.id === id) {
         if (status === SPKStatus.COMPLETED && s.status !== SPKStatus.COMPLETED) {
@@ -95,6 +109,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           ...s, 
           status, 
           completionNote: note || s.completionNote,
+          evidence: evidence || s.evidence,
           completedAt: status === SPKStatus.COMPLETED ? new Date().toISOString() : s.completedAt 
         };
       }
@@ -154,6 +169,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       spks, 
       technicians, 
       categories,
+      locations,
       globalSearchQuery,
       currentTechnician,
       isAdminLoggedIn,
@@ -163,6 +179,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       deleteAsset,
       addCategory,
       removeCategory,
+      addLocation,
+      removeLocation,
       createSPK, 
       reassignSPK, 
       updateSPKStatus, 

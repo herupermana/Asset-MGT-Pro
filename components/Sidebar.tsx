@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, Box, ClipboardList, PenTool, Mic, Settings, LogOut, Circle, Users } from 'lucide-react';
+import { LayoutDashboard, Box, ClipboardList, PenTool, Mic, Settings, LogOut, Circle, Users, FileText } from 'lucide-react';
 import { useApp } from '../AppContext';
 
 interface SidebarProps {
@@ -17,12 +17,13 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onExit }) =>
     { id: 'assets', icon: Box, label: 'Assets' },
     { id: 'spk', icon: ClipboardList, label: 'SPK & Repair' },
     { id: 'technicians', icon: Users, label: 'Personnel' },
+    { id: 'reports', icon: FileText, label: 'Reports' }, // New Reports Item
     { id: 'image-ai', icon: PenTool, label: 'Image AI Refiner' },
     { id: 'voice-ai', icon: Mic, label: 'Voice Assistant' },
   ];
 
   return (
-    <div className="w-64 bg-white h-screen border-r border-slate-200 flex flex-col fixed left-0 top-0">
+    <div className="w-64 bg-white h-screen border-r border-slate-200 flex flex-col fixed left-0 top-0 no-print">
       <div className="p-6 border-b border-slate-100 flex items-center gap-3">
         <div className="bg-blue-600 p-2 rounded-lg">
           <Box className="text-white w-6 h-6" />

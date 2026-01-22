@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { ArrowLeft, User, Box, Calendar, Clock, AlertCircle, CheckCircle2, MoreVertical, PenTool, UserCog, MapPin, Tag, Timer, Play, X, CheckCircle } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { ArrowLeft, User, Box, Calendar, Clock, AlertCircle, CheckCircle2, MoreVertical, PenTool, UserCog, MapPin, Tag, Timer, Play, X, CheckCircle, AlertTriangle, Camera, Trash2, Image as ImageIcon } from 'lucide-react';
 import { useApp } from '../AppContext';
 import { SPK, SPKStatus, AssetStatus } from '../types';
 
@@ -15,6 +15,10 @@ const SPKDetail: React.FC<SPKDetailProps> = ({ spk, onBack, onReassign }) => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editNote, setEditNote] = useState(spk.completionNote || '');
   const [editStatus, setEditStatus] = useState<SPKStatus>(spk.status);
+  const [editEvidence, setEditEvidence] = useState<string[]>(spk.evidence || []);
+  const [showNoteError, setShowNoteError] = useState(false);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const asset = assets.find(a => a.id === spk.assetId);
   const technician = technicians.find(t => t.id === spk.technicianId);
@@ -39,9 +43,27 @@ const SPKDetail: React.FC<SPKDetailProps> = ({ spk, onBack, onReassign }) => {
     }
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files) {
+      Array.from(files).forEach(file => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setEditEvidence(prev => [...prev, reader.result as string]);
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+  };
+
   const handleSaveProgress = () => {
-    updateSPKStatus(spk.id, editStatus, editNote);
+    if (editStatus === SPKStatus.COMPLETED && !editNote.trim()) {
+      setShowNoteError(true);
+      return;
+    }
+    updateSPKStatus(spk.id, editStatus, editNote, editEvidence);
     setIsEditModalOpen(false);
+    setShowNoteError(false);
   };
 
   return (
@@ -73,7 +95,10 @@ const SPKDetail: React.FC<SPKDetailProps> = ({ spk, onBack, onReassign }) => {
         <div className="flex items-center gap-2">
           {isAssignedToMe && spk.status !== SPKStatus.COMPLETED && (
             <button 
-              onClick={() => setIsEditModalOpen(true)}
+              onClick={() => {
+                setIsEditModalOpen(true);
+                setShowNoteError(false);
+              }}
               className="bg-emerald-600 text-white px-6 py-2.5 rounded-xl flex items-center gap-2 hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 active:scale-95 font-bold"
             >
               <Play className="w-5 h-5 fill-current" />
@@ -157,9 +182,25 @@ const SPKDetail: React.FC<SPKDetailProps> = ({ spk, onBack, onReassign }) => {
                 </div>
               </section>
             )}
+
+            {spk.evidence && spk.evidence.length > 0 && (
+              <section className="pt-8 border-t border-slate-50">
+                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Captured Evidence</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  {spk.evidence.map((img, i) => (
+                    <div key={i} className="aspect-video rounded-2xl overflow-hidden border border-slate-100 shadow-sm group relative">
+                      <img src={img} className="w-full h-full object-cover transition-transform group-hover:scale-105" alt="Evidence" />
+                      <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer" onClick={() => window.open(img)}>
+                        <ImageIcon className="w-6 h-6 text-white" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
 
-          {/* Timeline / Activity */}
+          {/* Work Order Progression timeline remains same */}
           <div className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm">
              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-8">Work Order Progression</h3>
              <div className="space-y-8 relative before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100">
@@ -197,7 +238,7 @@ const SPKDetail: React.FC<SPKDetailProps> = ({ spk, onBack, onReassign }) => {
           </div>
         </div>
 
-        {/* Sidebar Info */}
+        {/* Sidebar Info remains same */}
         <div className="space-y-6">
           <div className="bg-slate-900 rounded-[32px] p-8 text-white shadow-xl">
              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Execution Summary</h4>
@@ -245,8 +286,8 @@ const SPKDetail: React.FC<SPKDetailProps> = ({ spk, onBack, onReassign }) => {
       {/* Progress Update Modal for Logged in Tech */}
       {isEditModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
-          <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="px-10 pt-10 pb-6 flex justify-between items-center border-b border-slate-50">
+          <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+            <div className="px-10 pt-10 pb-6 flex justify-between items-center border-b border-slate-50 shrink-0">
               <div>
                 <h3 className="text-2xl font-bold text-slate-800">Direct Progress Update</h3>
                 <p className="text-xs text-slate-500 mt-1 uppercase font-bold tracking-widest">{spk.id}</p>
@@ -255,14 +296,17 @@ const SPKDetail: React.FC<SPKDetailProps> = ({ spk, onBack, onReassign }) => {
                 <X className="w-7 h-7 text-slate-400" />
               </button>
             </div>
-            <div className="p-10 space-y-8">
+            <div className="p-10 space-y-8 overflow-y-auto custom-scrollbar flex-1">
               <div className="space-y-3">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-widest px-1">Work Status</label>
                 <div className="grid grid-cols-3 gap-3">
                   {[SPKStatus.OPEN, SPKStatus.IN_PROGRESS, SPKStatus.COMPLETED].map((status) => (
                     <button
                       key={status}
-                      onClick={() => setEditStatus(status)}
+                      onClick={() => {
+                        setEditStatus(status);
+                        if (status !== SPKStatus.COMPLETED) setShowNoteError(false);
+                      }}
                       className={`py-3 rounded-2xl font-bold text-xs border-2 transition-all
                         ${editStatus === status 
                           ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-100' 
@@ -275,16 +319,61 @@ const SPKDetail: React.FC<SPKDetailProps> = ({ spk, onBack, onReassign }) => {
               </div>
 
               <div className="space-y-3">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest px-1">Observations & Notes</label>
+                <div className="flex justify-between items-end px-1">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Observations & Notes</label>
+                  {editStatus === SPKStatus.COMPLETED && (
+                    <span className="text-[10px] font-black text-rose-500 uppercase flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3" />
+                      Mandatory Completion Note
+                    </span>
+                  )}
+                </div>
                 <textarea 
-                  className="w-full h-40 px-6 py-4 bg-slate-50 border border-slate-100 rounded-[24px] outline-none focus:ring-4 focus:ring-blue-100 transition-all text-slate-700 resize-none font-medium"
-                  placeholder="Summarize your work findings..."
+                  className={`w-full h-40 px-6 py-4 bg-slate-50 border rounded-[24px] outline-none focus:ring-4 transition-all text-slate-700 resize-none font-medium
+                    ${showNoteError ? 'border-rose-500 focus:ring-rose-100' : 'border-slate-100 focus:ring-blue-100'}`}
+                  placeholder={editStatus === SPKStatus.COMPLETED ? "Please document your work results to finalize this order..." : "Summarize your work findings..."}
                   value={editNote}
-                  onChange={(e) => setEditNote(e.target.value)}
+                  onChange={(e) => {
+                    setEditNote(e.target.value);
+                    if (e.target.value.trim()) setShowNoteError(false);
+                  }}
                 />
+                {showNoteError && (
+                  <p className="text-[10px] font-black text-rose-500 uppercase px-2 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    Operational documentation is required for closing
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between px-1">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <Camera className="w-3.5 h-3.5" />
+                    Capture Evidence
+                  </label>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">{editEvidence.length} Photos</span>
+                </div>
+                
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {editEvidence.map((img, idx) => (
+                    <div key={idx} className="relative group aspect-square rounded-2xl overflow-hidden border border-slate-100">
+                      <img src={img} className="w-full h-full object-cover" alt="" />
+                      <button onClick={() => setEditEvidence(prev => prev.filter((_, i) => i !== idx))} className="absolute top-2 right-2 p-1.5 bg-rose-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                  
+                  <button onClick={() => fileInputRef.current?.click()} className="aspect-square rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center gap-2 text-slate-400 hover:border-blue-400 hover:text-blue-500 transition-all">
+                    <Camera className="w-6 h-6" />
+                    <span className="text-[10px] font-black uppercase">Upload</span>
+                  </button>
+                </div>
+                <input ref={fileInputRef} type="file" multiple accept="image/*" className="hidden" onChange={handleFileChange} />
               </div>
             </div>
-            <div className="px-10 pb-10 flex gap-4">
+            <div className="px-10 pb-10 flex gap-4 shrink-0 border-t border-slate-50 pt-6">
               <button 
                 onClick={() => setIsEditModalOpen(false)}
                 className="flex-1 py-4 text-slate-500 font-bold bg-slate-50 hover:bg-slate-100 rounded-2xl transition-all"
@@ -293,10 +382,11 @@ const SPKDetail: React.FC<SPKDetailProps> = ({ spk, onBack, onReassign }) => {
               </button>
               <button 
                 onClick={handleSaveProgress}
-                className="flex-[2] py-4 bg-emerald-600 text-white font-bold rounded-2xl shadow-xl shadow-emerald-100 hover:bg-emerald-700 active:scale-95 transition-all flex items-center justify-center gap-2"
+                className={`flex-[2] py-4 font-bold rounded-2xl shadow-xl transition-all flex items-center justify-center gap-2 active:scale-95
+                  ${editStatus === SPKStatus.COMPLETED ? 'bg-emerald-600 text-white shadow-emerald-100 hover:bg-emerald-700' : 'bg-blue-600 text-white shadow-blue-100 hover:bg-blue-700'}`}
               >
                 <CheckCircle className="w-5 h-5" />
-                Apply Update
+                {editStatus === SPKStatus.COMPLETED ? 'Finalize & Close' : 'Apply Update'}
               </button>
             </div>
           </div>

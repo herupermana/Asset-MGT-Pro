@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, Filter, Plus, MoreVertical, X, PenTool, Scan, Camera, ExternalLink, Calendar as CalendarIcon, Pencil, Trash2, AlertTriangle, Box, Truck, Layers, Hash } from 'lucide-react';
+import { Search, Filter, Plus, MoreVertical, X, PenTool, Scan, Camera, ExternalLink, Calendar as CalendarIcon, Pencil, Trash2, AlertTriangle, Box, Truck, Layers, Hash, MapPin } from 'lucide-react';
 import { useApp } from '../AppContext';
 import { Asset, AssetStatus, SPKStatus, SPK } from '../types';
 import AssetDetail from './AssetDetail';
@@ -8,10 +8,11 @@ import SPKDetail from './SPKDetail';
 import jsQR from 'jsqr';
 
 const AssetList: React.FC = () => {
-  const { assets, addAsset, updateAsset, deleteAsset, categories, addCategory, removeCategory, createSPK, technicians, globalSearchQuery, setGlobalSearchQuery, currentTechnician } = useApp();
+  const { assets, addAsset, updateAsset, deleteAsset, categories, addCategory, removeCategory, locations, addLocation, removeLocation, createSPK, technicians, globalSearchQuery, setGlobalSearchQuery, currentTechnician } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [isSPKModalOpen, setIsSPKModalOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
@@ -21,13 +22,14 @@ const AssetList: React.FC = () => {
   const [assetToDelete, setAssetToDelete] = useState<Asset | null>(null);
   
   const [newCatName, setNewCatName] = useState('');
+  const [newLocName, setNewLocName] = useState('');
 
   const isAdmin = !currentTechnician;
 
   const [newAsset, setNewAsset] = useState({ 
     name: '', 
     category: categories[0] || '', 
-    location: '', 
+    location: locations[0] || '', 
     status: AssetStatus.OPERATIONAL,
     purchaseDate: new Date().toISOString().split('T')[0],
     arrivedDate: new Date().toISOString().split('T')[0]
@@ -87,11 +89,19 @@ const AssetList: React.FC = () => {
     }
   };
 
+  const handleAddLocation = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newLocName.trim()) {
+      addLocation(newLocName.trim());
+      setNewLocName('');
+    }
+  };
+
   const resetForm = () => {
     setNewAsset({ 
       name: '', 
       category: categories[0] || '', 
-      location: '', 
+      location: locations[0] || '', 
       status: AssetStatus.OPERATIONAL,
       purchaseDate: new Date().toISOString().split('T')[0],
       arrivedDate: new Date().toISOString().split('T')[0]
@@ -126,44 +136,60 @@ const AssetList: React.FC = () => {
 
   // QR Scanner logic
   useEffect(() => {
-    let stream: MediaStream | null = null;
+    let currentStream: MediaStream | null = null;
     let animationFrameId: number;
-
-    const startScanner = async () => {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.setAttribute('playsinline', 'true');
-          videoRef.current.play();
-          requestAnimationFrame(tick);
-        }
-      } catch (err) {
-        console.error('Error accessing camera:', err);
-        setIsScannerOpen(false);
-      }
-    };
+    let isActive = true;
 
     const tick = () => {
+      if (!isActive) return;
       if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA && canvasRef.current) {
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
         if (ctx) {
           canvas.height = videoRef.current.videoHeight;
           canvas.width = videoRef.current.videoWidth;
-          ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const code = jsQR(imageData.data, imageData.width, imageData.height, {
-            inversionAttempts: 'dontInvert',
-          });
-          if (code) {
-            setGlobalSearchQuery(code.data);
-            setIsScannerOpen(false);
-            return;
+          if (canvas.width > 0 && canvas.height > 0) {
+            ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height, {
+              inversionAttempts: 'dontInvert',
+            });
+            if (code) {
+              setGlobalSearchQuery(code.data);
+              setIsScannerOpen(false);
+              return;
+            }
           }
         }
       }
       animationFrameId = requestAnimationFrame(tick);
+    };
+
+    const startScanner = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: 'environment' } 
+        });
+        
+        if (!isActive) {
+          stream.getTracks().forEach(t => t.stop());
+          return;
+        }
+
+        currentStream = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.setAttribute('playsinline', 'true');
+          // Use play() with catch for potential blocked autoplay
+          videoRef.current.play().catch(e => console.warn("Autoplay was blocked:", e));
+          animationFrameId = requestAnimationFrame(tick);
+        }
+      } catch (err) {
+        console.error('Error accessing camera:', err);
+        if (isActive) {
+          setIsScannerOpen(false);
+        }
+      }
     };
 
     if (isScannerOpen) {
@@ -171,12 +197,13 @@ const AssetList: React.FC = () => {
     }
 
     return () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
+      isActive = false;
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
       }
       cancelAnimationFrame(animationFrameId);
     };
-  }, [isScannerOpen]);
+  }, [isScannerOpen, setGlobalSearchQuery]);
 
   const activeSearch = searchTerm || globalSearchQuery;
   const filteredAssets = assets.filter(a => 
@@ -220,13 +247,22 @@ const AssetList: React.FC = () => {
           </div>
           <div className="flex items-center gap-2">
             {isAdmin && (
-              <button 
-                onClick={() => setIsCategoryModalOpen(true)}
-                className="bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl flex items-center gap-2 hover:bg-slate-50 transition-colors shadow-sm active:scale-95"
-              >
-                <Layers className="w-5 h-5 text-purple-500" />
-                <span>Categories</span>
-              </button>
+              <>
+                <button 
+                  onClick={() => setIsCategoryModalOpen(true)}
+                  className="bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl flex items-center gap-2 hover:bg-slate-50 transition-colors shadow-sm active:scale-95"
+                >
+                  <Layers className="w-5 h-5 text-purple-500" />
+                  <span className="hidden sm:inline">Categories</span>
+                </button>
+                <button 
+                  onClick={() => setIsLocationModalOpen(true)}
+                  className="bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl flex items-center gap-2 hover:bg-slate-50 transition-colors shadow-sm active:scale-95"
+                >
+                  <MapPin className="w-5 h-5 text-emerald-500" />
+                  <span className="hidden sm:inline">Locations</span>
+                </button>
+              </>
             )}
             <button 
               onClick={() => setIsScannerOpen(true)}
@@ -382,7 +418,7 @@ const AssetList: React.FC = () => {
     <div className="relative">
       {renderViewContent()}
 
-      {/* Registry Modal (Create) - Moved outside conditional return to be globally accessible */}
+      {/* Registry Modal (Create) */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
           <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-200">
@@ -424,7 +460,9 @@ const AssetList: React.FC = () => {
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Physical Location</label>
-                  <input required placeholder="Server Room 1" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-blue-100 transition-all font-medium text-slate-700" value={newAsset.location} onChange={e => setNewAsset({...newAsset, location: e.target.value})} />
+                  <select className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-blue-100 transition-all font-medium text-slate-700" value={newAsset.location} onChange={e => setNewAsset({...newAsset, location: e.target.value})}>
+                    {locations.map(loc => <option key={loc}>{loc}</option>)}
+                  </select>
                 </div>
               </div>
               <div className="pt-6 flex gap-4">
@@ -483,7 +521,54 @@ const AssetList: React.FC = () => {
         </div>
       )}
 
-      {/* Edit Modal - Globally accessible */}
+      {/* Location Manager Modal */}
+      {isLocationModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+             <div className="px-8 pt-8 pb-4 flex justify-between items-center border-b border-slate-50">
+              <div className="flex items-center gap-3">
+                <MapPin className="w-6 h-6 text-emerald-500" />
+                <h3 className="text-xl font-bold text-slate-800">Location Manager</h3>
+              </div>
+              <button onClick={() => setIsLocationModalOpen(false)} className="p-2 hover:bg-slate-50 rounded-full">
+                <X className="w-6 h-6 text-slate-400" />
+              </button>
+            </div>
+            <div className="p-8 space-y-6">
+              <form onSubmit={handleAddLocation} className="flex gap-2">
+                <input 
+                  required 
+                  placeholder="New location name..." 
+                  className="flex-1 px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-emerald-100 outline-none"
+                  value={newLocName}
+                  onChange={e => setNewLocName(e.target.value)}
+                />
+                <button type="submit" className="bg-emerald-600 text-white p-2 rounded-xl hover:bg-emerald-700 transition-all">
+                  <Plus className="w-6 h-6" />
+                </button>
+              </form>
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                {locations.map(loc => (
+                  <div key={loc} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl group border border-transparent hover:border-emerald-100 transition-all">
+                    <span className="text-sm font-bold text-slate-700">{loc}</span>
+                    <button 
+                      onClick={() => removeLocation(loc)}
+                      className="p-1.5 text-slate-300 hover:text-rose-500 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="p-6 bg-slate-50 text-center">
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Changes reflect instantly in registry forms</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
       {assetToEdit && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
           <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-200">
@@ -527,7 +612,9 @@ const AssetList: React.FC = () => {
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1">Physical Location</label>
-                  <input required className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-blue-100 transition-all font-medium text-slate-700" value={assetToEdit.location} onChange={e => setAssetToEdit({...assetToEdit, location: e.target.value})} />
+                  <select className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-blue-100 transition-all font-medium text-slate-700" value={assetToEdit.location} onChange={e => setAssetToEdit({...assetToEdit, location: e.target.value})}>
+                    {locations.map(loc => <option key={loc}>{loc}</option>)}
+                  </select>
                 </div>
               </div>
               <div className="pt-6 flex gap-4">

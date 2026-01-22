@@ -15,6 +15,15 @@ const VoiceAssistant: React.FC = () => {
   const streamRef = useRef<MediaStream | null>(null);
   const nextStartTimeRef = useRef<number>(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isComponentActive = useRef(true);
+
+  useEffect(() => {
+    isComponentActive.current = true;
+    return () => {
+      isComponentActive.current = false;
+      stopSession();
+    };
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -32,10 +41,28 @@ const VoiceAssistant: React.FC = () => {
     }
   };
 
+  const stopSession = () => {
+    setIsActive(false);
+    setStatus('idle');
+    streamRef.current?.getTracks().forEach(track => track.stop());
+    streamRef.current = null;
+    audioContextRef.current?.close();
+    audioContextRef.current = null;
+    outputAudioContextRef.current?.close();
+    outputAudioContextRef.current = null;
+    sessionPromiseRef.current = null;
+  };
+
   const startSession = async () => {
     setStatus('connecting');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      if (!isComponentActive.current) {
+        stream.getTracks().forEach(t => t.stop());
+        return;
+      }
+
       streamRef.current = stream;
 
       const inputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
@@ -45,17 +72,19 @@ const VoiceAssistant: React.FC = () => {
 
       const sessionPromise = gemini.connectLive({
         onOpen: () => {
+          if (!isComponentActive.current) return;
           setIsActive(true);
           setStatus('listening');
           startStreamingInput(inputCtx, stream, sessionPromise);
         },
         onAudio: (buffer) => {
+          if (!isComponentActive.current) return;
           playAudioBuffer(buffer, outputCtx);
           setStatus('responding');
         },
         onTranscription: (text, isUser) => {
+          if (!isComponentActive.current) return;
           setMessages(prev => {
-            // Check if last message was same role to append or create new
             const last = prev[prev.length - 1];
             if (last && last.role === (isUser ? 'user' : 'assistant')) {
               const updated = [...prev];
@@ -77,18 +106,10 @@ const VoiceAssistant: React.FC = () => {
 
       sessionPromiseRef.current = sessionPromise;
     } catch (err) {
-      alert("Microphone access is required for voice assistant.");
+      console.error("Microphone access failed:", err);
       setStatus('idle');
+      alert("Microphone access is required for the voice assistant. Please check your browser permissions.");
     }
-  };
-
-  const stopSession = () => {
-    setIsActive(false);
-    setStatus('idle');
-    streamRef.current?.getTracks().forEach(track => track.stop());
-    audioContextRef.current?.close();
-    outputAudioContextRef.current?.close();
-    sessionPromiseRef.current = null;
   };
 
   const startStreamingInput = (ctx: AudioContext, stream: MediaStream, sessionPromise: Promise<any>) => {
@@ -96,6 +117,7 @@ const VoiceAssistant: React.FC = () => {
     const processor = ctx.createScriptProcessor(4096, 1, 1);
     
     processor.onaudioprocess = (e) => {
+      if (!isActive) return;
       const inputData = e.inputBuffer.getChannelData(0);
       const l = inputData.length;
       const int16 = new Int16Array(l);
@@ -104,11 +126,12 @@ const VoiceAssistant: React.FC = () => {
       }
       
       const pcmData = encode(new Uint8Array(int16.buffer));
-      // CRITICAL: Ensure we only send if the session is resolved
       sessionPromise.then((session) => {
-        session.sendRealtimeInput({
-          media: { data: pcmData, mimeType: 'audio/pcm;rate=16000' }
-        });
+        if (isActive) {
+          session.sendRealtimeInput({
+            media: { data: pcmData, mimeType: 'audio/pcm;rate=16000' }
+          });
+        }
       });
     };
 
@@ -117,11 +140,11 @@ const VoiceAssistant: React.FC = () => {
   };
 
   const playAudioBuffer = (buffer: AudioBuffer, ctx: AudioContext) => {
+    if (!ctx || ctx.state === 'closed') return;
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.connect(ctx.destination);
     
-    // Gapless playback logic
     const startTime = Math.max(nextStartTimeRef.current, ctx.currentTime);
     source.start(startTime);
     nextStartTimeRef.current = startTime + buffer.duration;
@@ -181,7 +204,6 @@ const VoiceAssistant: React.FC = () => {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Dynamic Waveform Visualizer */}
         {isActive && (
           <div className="h-12 flex items-center justify-center gap-1 bg-slate-50/50 px-8 border-t border-slate-50">
             {[...Array(32)].map((_, i) => (
