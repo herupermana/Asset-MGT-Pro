@@ -7,6 +7,7 @@ import SPKManager from './components/SPKManager';
 import ImageAIRefiner from './components/ImageAIRefiner';
 import VoiceAssistant from './components/VoiceAssistant';
 import TechnicianWorkspace from './components/TechnicianWorkspace';
+import TechnicianManager from './components/TechnicianManager';
 import AdminLogin from './components/AdminLogin';
 import { User, Bell, Search, X, UserCircle, LayoutDashboard, HardHat, ArrowRight, ShieldCheck, Box, LogOut, ChevronDown } from 'lucide-react';
 import { useApp } from './AppContext';
@@ -162,6 +163,7 @@ const App: React.FC = () => {
       case 'dashboard': return <Dashboard />;
       case 'assets': return <AssetList />;
       case 'spk': return <SPKManager />;
+      case 'technicians': return <TechnicianManager />;
       case 'image-ai': return <ImageAIRefiner />;
       case 'voice-ai': return <VoiceAssistant />;
       default: return <Dashboard />;

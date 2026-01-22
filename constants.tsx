@@ -38,9 +38,9 @@ export const MOCK_ASSETS: Asset[] = [
 ];
 
 export const MOCK_TECHNICIANS: Technician[] = [
-  { id: 'TECH-01', name: 'Budi Santoso', specialty: 'Electrical', activeTasks: 2 },
-  { id: 'TECH-02', name: 'Siti Aminah', specialty: 'HVAC', activeTasks: 1 },
-  { id: 'TECH-03', name: 'Andi Wijaya', specialty: 'IT Network', activeTasks: 0 }
+  { id: 'TECH-01', name: 'Budi Santoso', specialty: 'Electrical', activeTasks: 2, password: 'password123' },
+  { id: 'TECH-02', name: 'Siti Aminah', specialty: 'HVAC', activeTasks: 1, password: 'password123' },
+  { id: 'TECH-03', name: 'Andi Wijaya', specialty: 'IT Network', activeTasks: 0, password: 'password123' }
 ];
 
 export const MOCK_SPKS: SPK[] = [

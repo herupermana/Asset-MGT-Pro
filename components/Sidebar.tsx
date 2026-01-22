@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, Box, ClipboardList, PenTool, Mic, Settings, LogOut, Circle } from 'lucide-react';
+import { LayoutDashboard, Box, ClipboardList, PenTool, Mic, Settings, LogOut, Circle, Users } from 'lucide-react';
 import { useApp } from '../AppContext';
 
 interface SidebarProps {
@@ -16,6 +16,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onExit }) =>
     { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { id: 'assets', icon: Box, label: 'Assets' },
     { id: 'spk', icon: ClipboardList, label: 'SPK & Repair' },
+    { id: 'technicians', icon: Users, label: 'Personnel' },
     { id: 'image-ai', icon: PenTool, label: 'Image AI Refiner' },
     { id: 'voice-ai', icon: Mic, label: 'Voice Assistant' },
   ];

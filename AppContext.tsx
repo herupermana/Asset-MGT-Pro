@@ -21,10 +21,12 @@ interface AppContextType {
   reassignSPK: (spkId: string, newTechnicianId: string) => void;
   updateSPKStatus: (id: string, status: SPKStatus, note?: string) => void;
   updateAssetStatus: (id: string, status: AssetStatus) => void;
-  loginTechnician: (id: string) => Promise<boolean>;
+  loginTechnician: (id: string, password: string) => Promise<boolean>;
   loginAdmin: (password: string) => Promise<boolean>;
   logout: () => void;
   logoutAdmin: () => void;
+  addTechnician: (tech: Technician) => void;
+  deleteTechnician: (id: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -103,10 +105,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setAssets(prev => prev.map(a => a.id === id ? { ...a, status } : a));
   };
 
-  const loginTechnician = async (id: string): Promise<boolean> => {
+  const loginTechnician = async (id: string, password: string): Promise<boolean> => {
     return new Promise((resolve) => {
       setTimeout(() => {
-        const tech = technicians.find(t => t.id === id);
+        const tech = technicians.find(t => t.id === id && t.password === password);
         if (tech) {
           setCurrentTechnician(tech);
           resolve(true);
@@ -133,6 +135,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const logout = () => setCurrentTechnician(null);
   const logoutAdmin = () => setIsAdminLoggedIn(false);
 
+  const addTechnician = (tech: Technician) => {
+    setTechnicians(prev => [tech, ...prev]);
+  };
+
+  const deleteTechnician = (id: string) => {
+    setTechnicians(prev => prev.filter(t => t.id !== id));
+  };
+
   return (
     <AppContext.Provider value={{ 
       assets, 
@@ -155,7 +165,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       loginTechnician,
       loginAdmin,
       logout,
-      logoutAdmin
+      logoutAdmin,
+      addTechnician,
+      deleteTechnician
     }}>
       {children}
     </AppContext.Provider>

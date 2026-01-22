@@ -30,6 +30,7 @@ export interface Technician {
   name: string;
   specialty: string;
   activeTasks: number;
+  password?: string; // Added password field
 }
 
 export interface SPK {
