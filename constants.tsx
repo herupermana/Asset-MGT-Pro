@@ -8,6 +8,7 @@ export const MOCK_ASSETS: Asset[] = [
     category: 'IT Infrastructure',
     location: 'Data Center Room A',
     purchaseDate: '2023-01-15',
+    arrivedDate: '2023-01-20',
     status: AssetStatus.OPERATIONAL,
     imageUrl: 'https://picsum.photos/seed/server/400/300',
     lastMaintenance: '2023-12-10'
@@ -18,6 +19,7 @@ export const MOCK_ASSETS: Asset[] = [
     category: 'Facilities',
     location: 'Rooftop Section 4',
     purchaseDate: '2022-05-20',
+    arrivedDate: '2022-06-05',
     status: AssetStatus.MAINTENANCE,
     imageUrl: 'https://picsum.photos/seed/hvac/400/300',
     lastMaintenance: '2024-02-01'
@@ -28,6 +30,7 @@ export const MOCK_ASSETS: Asset[] = [
     category: 'Office Equipment',
     location: 'Meeting Room 2',
     purchaseDate: '2023-08-11',
+    arrivedDate: '2023-08-15',
     status: AssetStatus.REPAIR,
     imageUrl: 'https://picsum.photos/seed/projector/400/300',
     lastMaintenance: '2023-11-20'
@@ -49,6 +52,16 @@ export const MOCK_SPKS: SPK[] = [
     description: 'Projector lamp is flickering and dim.',
     priority: 'Medium',
     status: SPKStatus.IN_PROGRESS,
-    createdAt: '2024-02-15'
+    createdAt: '2024-02-15',
+    dueDate: '2024-02-28'
   }
+];
+
+export const DEFAULT_CATEGORIES = [
+  'IT Infrastructure',
+  'Facilities',
+  'Vehicles',
+  'Office Equipment',
+  'Safety Gear',
+  'Manufacturing'
 ];

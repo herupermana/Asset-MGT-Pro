@@ -19,6 +19,7 @@ export interface Asset {
   category: string;
   location: string;
   purchaseDate: string;
+  arrivedDate: string; // New field
   status: AssetStatus;
   imageUrl: string;
   lastMaintenance: string;
@@ -40,7 +41,9 @@ export interface SPK {
   priority: 'Low' | 'Medium' | 'High';
   status: SPKStatus;
   createdAt: string;
+  dueDate: string;
   completedAt?: string;
+  completionNote?: string;
 }
 
 export interface ConversationMessage {

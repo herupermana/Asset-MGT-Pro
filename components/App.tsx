@@ -7,12 +7,12 @@ import SPKManager from './components/SPKManager';
 import ImageAIRefiner from './components/ImageAIRefiner';
 import VoiceAssistant from './components/VoiceAssistant';
 import TechnicianWorkspace from './components/TechnicianWorkspace';
-import { User, Bell, Search, X } from 'lucide-react';
+import { User, Bell, Search, X, UserCircle } from 'lucide-react';
 import { useApp } from './AppContext';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const { globalSearchQuery, setGlobalSearchQuery } = useApp();
+  const { globalSearchQuery, setGlobalSearchQuery, currentTechnician } = useApp();
 
   const renderContent = () => {
     switch (activeTab) {
@@ -64,7 +64,6 @@ const App: React.FC = () => {
               <Bell className="w-5 h-5" />
               <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
               
-              {/* Fake Notification Dropdown for "Full Functionality" feel */}
               <div className="absolute top-full right-0 mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-slate-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all p-4 z-50">
                 <h4 className="text-xs font-bold text-slate-400 uppercase mb-3">Recent Notifications</h4>
                 <div className="space-y-3">
@@ -81,11 +80,25 @@ const App: React.FC = () => {
             </button>
             <div className="flex items-center gap-3 pl-6 border-l border-slate-100">
               <div className="text-right hidden md:block">
-                <p className="text-sm font-bold text-slate-800">Admin Panel</p>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Super Administrator</p>
+                {currentTechnician ? (
+                  <>
+                    <p className="text-sm font-bold text-blue-600">{currentTechnician.name}</p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{currentTechnician.specialty} Specialist</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-bold text-slate-800">Administrator</p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Super Administrator</p>
+                  </>
+                )}
               </div>
-              <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-200 cursor-pointer hover:scale-105 transition-transform">
-                <User className="text-white w-5 h-5" />
+              <div 
+                onClick={() => setActiveTab('technician')}
+                className={`w-10 h-10 rounded-full flex items-center justify-center shadow-lg cursor-pointer hover:scale-105 transition-transform ${
+                  currentTechnician ? 'bg-emerald-500 shadow-emerald-100' : 'bg-blue-600 shadow-blue-200'
+                }`}
+              >
+                {currentTechnician ? <UserCircle className="text-white w-6 h-6" /> : <User className="text-white w-5 h-5" />}
               </div>
             </div>
           </div>
