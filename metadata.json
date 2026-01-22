@@ -1,0 +1,8 @@
+{
+  "name": "AssetPro AI - Enterprise Asset Management",
+  "description": "A comprehensive corporate asset management system with AI-powered image editing for documentation and a real-time voice assistant for hands-free operations.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
