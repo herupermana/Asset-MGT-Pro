@@ -30,7 +30,8 @@ export interface Technician {
   name: string;
   specialty: string;
   activeTasks: number;
-  password?: string; // Added password field
+  password?: string;
+  rank?: string; // New field for badge rank
 }
 
 export interface SPK {

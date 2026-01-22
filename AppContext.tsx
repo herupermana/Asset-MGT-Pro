@@ -27,6 +27,7 @@ interface AppContextType {
   logoutAdmin: () => void;
   addTechnician: (tech: Technician) => void;
   deleteTechnician: (id: string) => void;
+  updateTechnicianRank: (id: string, rank: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -143,6 +144,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setTechnicians(prev => prev.filter(t => t.id !== id));
   };
 
+  const updateTechnicianRank = (id: string, rank: string) => {
+    setTechnicians(prev => prev.map(t => t.id === id ? { ...t, rank } : t));
+  };
+
   return (
     <AppContext.Provider value={{ 
       assets, 
@@ -167,7 +172,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       logout,
       logoutAdmin,
       addTechnician,
-      deleteTechnician
+      deleteTechnician,
+      updateTechnicianRank
     }}>
       {children}
     </AppContext.Provider>
