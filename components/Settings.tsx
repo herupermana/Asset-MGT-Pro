@@ -11,7 +11,7 @@ import {
   History, Loader2, Languages, Sparkles, Server, Network, 
   Activity, CloudUpload, ShieldCheck, DatabaseZap, Terminal,
   ArrowRight, HardHat, Box, ClipboardList, AlertCircle, Cpu,
-  Lock, Zap, ToggleLeft, ToggleRight
+  Lock, Zap, ToggleLeft, ToggleRight, Key, ShieldAlert
 } from 'lucide-react';
 
 const SettingsView: React.FC = () => {
@@ -22,7 +22,7 @@ const SettingsView: React.FC = () => {
     theme, setTheme, language, setLanguage,
     isAutoTranslateEnabled, setAutoTranslate,
     storageMode, setStorageMode, setDbEndpoint, isDbConnected,
-    redisConfig, setRedisConfig
+    redisConfig, setRedisConfig, mysqlConfig, setMysqlConfig
   } = useApp();
 
   const [activeSection, setActiveSection] = useState<'system' | 'appearance' | 'infrastructure' | 'governance'>('system');
@@ -32,32 +32,39 @@ const SettingsView: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [testResult, setTestResult] = useState<'none' | 'success' | 'fail' | 'testing'>('none');
   
-  // Redis Local State
-  const [localRedis, setLocalRedis] = useState(redisConfig);
+  // Test results
+  const [testResult, setTestResult] = useState<'none' | 'success' | 'fail' | 'testing'>('none');
+  const [mysqlTestStatus, setMysqlTestStatus] = useState<'none' | 'success' | 'fail' | 'testing'>('none');
   const [redisTestStatus, setRedisTestStatus] = useState<'none' | 'success' | 'fail' | 'testing'>('none');
+  
+  // Local Config states
+  const [localRedis, setLocalRedis] = useState(redisConfig);
+  const [localMysql, setLocalMysql] = useState(mysqlConfig);
 
   // Migration State
   const [isMigrating, setIsMigrating] = useState(false);
   const [migrationStatus, setMigrationStatus] = useState('');
   const [remoteStats, setRemoteStats] = useState<any>(null);
+  const [statsError, setStatsError] = useState(false);
 
   useEffect(() => {
     if (storageMode === 'sql_remote' && isDbConnected) {
       fetchRemoteStats();
     } else {
       setRemoteStats(null);
+      setStatsError(false);
     }
   }, [storageMode, isDbConnected]);
 
   const fetchRemoteStats = async () => {
-    // Resilience: api.fetchDbStats now returns null instead of throwing on network fail
+    setStatsError(false);
     const stats = await api.fetchDbStats();
     if (stats) {
       setRemoteStats(stats);
     } else {
       setRemoteStats(null);
+      setStatsError(true);
     }
   };
 
@@ -66,6 +73,7 @@ const SettingsView: React.FC = () => {
     setTimeout(() => {
       setDbEndpoint(dbUrl);
       setRedisConfig(localRedis);
+      setMysqlConfig(localMysql);
       setIsSaving(false);
       setHasUnsavedChanges(false);
       setShowSuccess(true);
@@ -73,7 +81,7 @@ const SettingsView: React.FC = () => {
     }, 800);
   };
 
-  const testConnection = async () => {
+  const testApiBridge = async () => {
     setTestResult('testing');
     try {
       const oldUrl = api.getEndpoint();
@@ -84,6 +92,13 @@ const SettingsView: React.FC = () => {
     } catch (e) {
       setTestResult('fail');
     }
+  };
+
+  const testMysql = async () => {
+    setMysqlTestStatus('testing');
+    const ok = await api.testMySQLConnection(localMysql);
+    setMysqlTestStatus(ok ? 'success' : 'fail');
+    setTimeout(() => setMysqlTestStatus('none'), 4000);
   };
 
   const testRedis = async () => {
@@ -116,12 +131,11 @@ const SettingsView: React.FC = () => {
   };
 
   useEffect(() => {
-    if (dbUrl !== api.getEndpoint() || JSON.stringify(localRedis) !== JSON.stringify(redisConfig)) {
-      setHasUnsavedChanges(true);
-    } else {
-      setHasUnsavedChanges(false);
-    }
-  }, [dbUrl, localRedis, redisConfig]);
+    const redisChanged = JSON.stringify(localRedis) !== JSON.stringify(redisConfig);
+    const mysqlChanged = JSON.stringify(localMysql) !== JSON.stringify(mysqlConfig);
+    const bridgeChanged = dbUrl !== api.getEndpoint();
+    setHasUnsavedChanges(redisChanged || mysqlChanged || bridgeChanged);
+  }, [dbUrl, localRedis, redisConfig, localMysql, mysqlConfig]);
 
   const renderSectionContent = () => {
     switch (activeSection) {
@@ -216,7 +230,7 @@ const SettingsView: React.FC = () => {
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="grid grid-cols-2 gap-6">
               <button 
-                onClick={() => { setTheme('light'); }}
+                onClick={() => setTheme('light')}
                 className={`p-10 rounded-[40px] border-2 text-left transition-all space-y-4 ${theme === 'light' ? 'bg-white border-blue-600 text-slate-900' : 'bg-white/5 border-transparent text-slate-500 hover:bg-white/10'}`}
               >
                 <Sun className={`w-8 h-8 ${theme === 'light' ? 'text-blue-600' : 'text-slate-600'}`} />
@@ -226,7 +240,7 @@ const SettingsView: React.FC = () => {
                 </div>
               </button>
               <button 
-                onClick={() => { setTheme('dark'); }}
+                onClick={() => setTheme('dark')}
                 className={`p-10 rounded-[40px] border-2 text-left transition-all space-y-4 ${theme === 'dark' ? 'bg-slate-900 border-blue-600 text-white' : 'bg-white/5 border-transparent text-slate-500 hover:bg-white/10'}`}
               >
                 <Moon className={`w-8 h-8 ${theme === 'dark' ? 'text-blue-400' : 'text-slate-600'}`} />
@@ -246,7 +260,7 @@ const SettingsView: React.FC = () => {
                 {['en', 'id'].map(l => (
                   <button 
                     key={l}
-                    onClick={() => { setLanguage(l as any); }}
+                    onClick={() => setLanguage(l as any)}
                     className={`p-5 rounded-2xl border-2 font-black text-xs uppercase tracking-widest transition-all ${language === l ? 'bg-blue-600/10 border-blue-600 text-white' : 'bg-white/5 border-transparent text-slate-500 hover:bg-white/10'}`}
                   >
                     {l === 'en' ? 'English - Global' : 'Bahasa Indonesia'}
@@ -265,7 +279,7 @@ const SettingsView: React.FC = () => {
                   </div>
                 </div>
                 <button 
-                  onClick={() => { setAutoTranslate(!isAutoTranslateEnabled); }}
+                  onClick={() => setAutoTranslate(!isAutoTranslateEnabled)}
                   className={`w-14 h-8 rounded-full relative transition-all ${isAutoTranslateEnabled ? 'bg-blue-600' : 'bg-slate-800'}`}
                 >
                   <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${isAutoTranslateEnabled ? 'right-1' : 'left-1'}`} />
@@ -282,95 +296,206 @@ const SettingsView: React.FC = () => {
                 <DatabaseZap className="w-8 h-8" />
               </div>
               <div>
-                <h4 className="text-lg font-black text-white uppercase tracking-tight">Enterprise Persistence Hub</h4>
-                <p className="text-sm text-slate-400 font-medium">Switch between local sandbox and corporate production database server.</p>
+                <h4 className="text-lg font-black text-white uppercase tracking-tight">Persistence Protocol</h4>
+                <p className="text-sm text-slate-400 font-medium">Configure where the enterprise ledger is stored and processed.</p>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-6">
               <button 
-                onClick={() => { setStorageMode('local'); }}
+                onClick={() => setStorageMode('local')}
                 className={`p-10 rounded-[40px] border-2 text-left transition-all space-y-4 ${storageMode === 'local' ? 'bg-blue-600/10 border-blue-600' : 'bg-white/5 border-transparent hover:bg-white/10'}`}
               >
                 <Smartphone className="w-10 h-10 text-blue-500" />
                 <div>
-                  <h4 className="text-lg font-black text-white uppercase">Local Sandbox</h4>
-                  <p className="text-xs text-slate-500 font-bold mt-1">Browser-based storage (Session ephemeral).</p>
+                  <h4 className="text-lg font-black text-white uppercase">Local Ledger</h4>
+                  <p className="text-xs text-slate-500 font-bold mt-1">Browser storage (Demo sandbox).</p>
                 </div>
               </button>
               <button 
-                onClick={() => { setStorageMode('sql_remote'); }}
+                onClick={() => setStorageMode('sql_remote')}
                 className={`p-10 rounded-[40px] border-2 text-left transition-all space-y-4 ${storageMode === 'sql_remote' ? 'bg-blue-600/10 border-blue-600' : 'bg-white/5 border-transparent hover:bg-white/10'}`}
               >
                 <Server className="w-10 h-10 text-indigo-500" />
                 <div>
-                  <h4 className="text-lg font-black text-white uppercase">Production Server</h4>
-                  <p className="text-xs text-slate-500 font-bold mt-1">Direct link to corporate SQL Infrastructure.</p>
+                  <h4 className="text-lg font-black text-white uppercase">Enterprise SQL</h4>
+                  <p className="text-xs text-slate-500 font-bold mt-1">Production MySQL Infrastructure.</p>
                 </div>
               </button>
             </div>
 
-            {/* SQL DATABASE CONNECTOR */}
-            <div className="glass-card p-10 rounded-[48px] border-white/5 space-y-10 animate-in zoom-in-95">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-xl font-black text-white uppercase tracking-tight">Database Connector Configuration</h4>
-                    <p className="text-xs text-slate-500 font-bold mt-1 uppercase tracking-widest">Master API REST Bridge</p>
-                  </div>
-                  <div className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border ${isDbConnected ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-rose-500/10 text-rose-500 border-rose-500/20'}`}>
-                    <Activity className={`w-3.5 h-3.5 ${isDbConnected ? 'animate-pulse' : ''}`} />
-                    {isDbConnected ? 'Secure Node Online' : 'Persistence Node Disconnected'}
+            {/* API BRIDGE SETTINGS */}
+            <div className="glass-card p-10 rounded-[48px] border-white/5 space-y-10">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xl font-black text-white uppercase tracking-tight">API REST Bridge</h4>
+                <div className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border ${isDbConnected ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-rose-500/10 text-rose-500 border-rose-500/20'}`}>
+                  <Activity className={`w-3.5 h-3.5 ${isDbConnected ? 'animate-pulse' : ''}`} />
+                  {isDbConnected ? 'Bridge Online' : 'Bridge Fault'}
+                </div>
+              </div>
+              <div className="space-y-4">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Central Server Endpoint</label>
+                <div className="flex gap-4">
+                  <input 
+                    className="flex-1 px-8 py-5 rounded-[24px] outline-none text-white font-black bg-white/5 border border-white/10 focus:ring-[12px] focus:ring-blue-500/10 text-lg"
+                    value={dbUrl}
+                    onChange={(e) => setDbUrl(e.target.value)}
+                    placeholder="http://localhost:3000/api"
+                  />
+                  <button 
+                    onClick={testApiBridge}
+                    disabled={testResult === 'testing'}
+                    className={`px-8 rounded-[24px] font-black text-[10px] uppercase tracking-[0.2em] transition-all border flex items-center gap-3
+                      ${testResult === 'success' ? 'bg-emerald-600 border-emerald-500 text-white' : 
+                        testResult === 'fail' ? 'bg-rose-600 border-rose-500 text-white' : 
+                        'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}
+                  >
+                    {testResult === 'testing' ? <Loader2 className="w-4 h-4 animate-spin" /> : 
+                     testResult === 'success' ? <Check className="w-4 h-4" /> : 
+                     testResult === 'fail' ? <X className="w-4 h-4" /> : <Network className="w-4 h-4" />}
+                    Test Bridge
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* MYSQL CONFIGURATION */}
+            <div className="glass-card p-10 rounded-[48px] border-white/5 space-y-10">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-500">
+                  <Database className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4 className="text-xl font-black text-white uppercase tracking-tight">Enterprise MySQL Ledger</h4>
+                  <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">Dedicated DB Configuration</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Database Host</label>
+                  <input 
+                    className="w-full px-6 py-4 rounded-2xl outline-none text-white font-bold bg-white/5 border border-white/10"
+                    value={localMysql.host}
+                    onChange={e => setLocalMysql({...localMysql, host: e.target.value})}
+                    placeholder="localhost"
+                  />
+                </div>
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Listen Port</label>
+                  <input 
+                    type="number"
+                    className="w-full px-6 py-4 rounded-2xl outline-none text-white font-bold bg-white/5 border border-white/10"
+                    value={localMysql.port}
+                    onChange={e => setLocalMysql({...localMysql, port: parseInt(e.target.value) || 3306})}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Connect Username</label>
+                  <div className="relative">
+                    <User className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
+                    <input 
+                      className="w-full pl-12 pr-6 py-4 rounded-2xl outline-none text-white font-bold bg-white/5 border border-white/10"
+                      value={localMysql.user}
+                      onChange={e => setLocalMysql({...localMysql, user: e.target.value})}
+                      placeholder="db_admin"
+                    />
                   </div>
                 </div>
-
-                <div className="space-y-6">
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 flex items-center gap-2">
-                       <Terminal className="w-4 h-4 text-blue-500" />
-                       Central REST Server Endpoint
-                    </label>
-                    <div className="flex gap-4">
-                      <input 
-                        className="flex-1 px-8 py-5 rounded-[24px] outline-none text-white font-black bg-white/5 border border-white/10 focus:ring-[12px] focus:ring-blue-500/10 text-lg"
-                        value={dbUrl}
-                        onChange={(e) => setDbUrl(e.target.value)}
-                        placeholder="http://192.168.1.100:3000/api"
-                      />
-                      <button 
-                        onClick={testConnection}
-                        disabled={testResult === 'testing'}
-                        className={`px-8 rounded-[24px] font-black text-[10px] uppercase tracking-[0.2em] transition-all border flex items-center gap-3
-                          ${testResult === 'success' ? 'bg-emerald-600 border-emerald-500 text-white' : 
-                            testResult === 'fail' ? 'bg-rose-600 border-rose-500 text-white' : 
-                            'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}
-                      >
-                        {testResult === 'testing' ? <Loader2 className="w-4 h-4 animate-spin" /> : 
-                         testResult === 'success' ? <Check className="w-4 h-4" /> : 
-                         testResult === 'fail' ? <X className="w-4 h-4" /> : <Network className="w-4 h-4" />}
-                        {testResult === 'testing' ? 'Handshaking...' : 
-                         testResult === 'success' ? 'Connection Verified' : 
-                         testResult === 'fail' ? 'Connection Fault' : 'Test Connector'}
-                      </button>
-                    </div>
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Auth Password</label>
+                  <div className="relative">
+                    <Key className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
+                    <input 
+                      type="password"
+                      className="w-full pl-12 pr-6 py-4 rounded-2xl outline-none text-white font-bold bg-white/5 border border-white/10"
+                      value={localMysql.password || ''}
+                      onChange={e => setLocalMysql({...localMysql, password: e.target.value})}
+                      placeholder="••••••••"
+                    />
                   </div>
-
-                  {storageMode === 'sql_remote' && remoteStats && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in slide-in-from-bottom-2">
-                      <div className="p-6 bg-white/5 border border-white/5 rounded-3xl text-center space-y-1">
-                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Remote Assets</p>
-                        <p className="text-3xl font-black text-white">{remoteStats.assetCount}</p>
-                      </div>
-                      <div className="p-6 bg-white/5 border border-white/5 rounded-3xl text-center space-y-1">
-                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Remote Orders</p>
-                        <p className="text-3xl font-black text-white">{remoteStats.spkCount}</p>
-                      </div>
-                      <div className="p-6 bg-white/5 border border-white/5 rounded-3xl text-center space-y-1">
-                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Connected Units</p>
-                        <p className="text-3xl font-black text-white">{remoteStats.techCount}</p>
-                      </div>
-                    </div>
-                  )}
                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Instance / Database Name</label>
+                  <input 
+                    className="w-full px-6 py-4 rounded-2xl outline-none text-white font-bold bg-white/5 border border-white/10"
+                    value={localMysql.database}
+                    onChange={e => setLocalMysql({...localMysql, database: e.target.value})}
+                    placeholder="asset_pro_db"
+                  />
+                </div>
+                <div className="flex items-end pb-1">
+                  <button 
+                    onClick={testMysql}
+                    disabled={mysqlTestStatus === 'testing'}
+                    className={`flex items-center gap-3 px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all border w-full justify-center
+                      ${mysqlTestStatus === 'success' ? 'bg-emerald-600 border-emerald-500 text-white' : 
+                        mysqlTestStatus === 'fail' ? 'bg-rose-600 border-rose-500 text-white' : 
+                        'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}
+                  >
+                    {mysqlTestStatus === 'testing' ? <Loader2 className="w-4 h-4 animate-spin" /> : 
+                     mysqlTestStatus === 'success' ? <Check className="w-4 h-4" /> : 
+                     mysqlTestStatus === 'fail' ? <X className="w-4 h-4" /> : <RefreshCw className="w-4 h-4" />}
+                    {mysqlTestStatus === 'testing' ? 'Handshaking...' : 
+                     mysqlTestStatus === 'success' ? 'Database Linked' : 
+                     mysqlTestStatus === 'fail' ? 'Link Failed' : 'Test SQL Link'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-6 bg-white/5 rounded-[24px] border border-white/5">
+                <div className="flex items-center gap-4">
+                  <ShieldCheck className="w-5 h-5 text-blue-400" />
+                  <p className="text-xs text-slate-400 font-medium">Require SSL/TLS encrypted tunnel for database communication.</p>
+                </div>
+                <button 
+                  onClick={() => setLocalMysql({...localMysql, ssl: !localMysql.ssl})}
+                  className={`w-12 h-6 rounded-full relative transition-all ${localMysql.ssl ? 'bg-blue-600' : 'bg-slate-800'}`}
+                >
+                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${localMysql.ssl ? 'right-1' : 'left-1'}`} />
+                </button>
+              </div>
+
+              {storageMode === 'sql_remote' && (
+                <div className="pt-8 border-t border-white/5">
+                   <div className="flex items-center justify-between mb-6">
+                      <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Remote Node Telemetry</p>
+                      <button onClick={fetchRemoteStats} className="text-blue-500 hover:text-blue-400 transition-colors"><RefreshCw className="w-3.5 h-3.5" /></button>
+                   </div>
+                   
+                   {statsError ? (
+                     <div className="p-6 bg-rose-500/10 border border-rose-500/20 rounded-3xl flex items-center gap-4 text-rose-500">
+                        <AlertCircle className="w-5 h-5 shrink-0" />
+                        <p className="text-xs font-bold uppercase tracking-widest">Failed to fetch remote stats. Persistence node may be unreachable.</p>
+                     </div>
+                   ) : remoteStats ? (
+                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in slide-in-from-bottom-2">
+                        <div className="p-6 bg-white/5 border border-white/5 rounded-3xl text-center space-y-1">
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Remote Assets</p>
+                          <p className="text-3xl font-black text-white">{remoteStats.assetCount}</p>
+                        </div>
+                        <div className="p-6 bg-white/5 border border-white/5 rounded-3xl text-center space-y-1">
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Remote Orders</p>
+                          <p className="text-3xl font-black text-white">{remoteStats.spkCount}</p>
+                        </div>
+                        <div className="p-6 bg-white/5 border border-white/5 rounded-3xl text-center space-y-1">
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Personnel Nodes</p>
+                          <p className="text-3xl font-black text-white">{remoteStats.techCount}</p>
+                        </div>
+                      </div>
+                   ) : (
+                     <div className="h-24 flex items-center justify-center text-slate-700">
+                        <Loader2 className="w-6 h-6 animate-spin" />
+                     </div>
+                   )}
+                </div>
+              )}
             </div>
 
             {/* REDIS ACCELERATOR SECTION */}
@@ -480,9 +605,9 @@ const SettingsView: React.FC = () => {
                     <div className="space-y-2">
                       <h5 className="text-white font-black text-lg uppercase tracking-tight flex items-center gap-3">
                         <Network className="w-5 h-5 text-indigo-500" />
-                        Production Data Migration
+                        Data Migration Protocol
                       </h5>
-                      <p className="text-sm text-slate-500 font-medium">Ready to move from demo to real infrastructure? Sync your current browser data to the server.</p>
+                      <p className="text-sm text-slate-500 font-medium">Transfer all local demonstration objects to the production enterprise SQL ledger.</p>
                     </div>
                     
                     <div className="flex flex-col md:flex-row items-center gap-8">
@@ -492,7 +617,7 @@ const SettingsView: React.FC = () => {
                               <Smartphone className="w-6 h-6" />
                             </div>
                             <div>
-                               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Local Buffer</p>
+                               <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Sandbox</p>
                                <p className="text-sm font-black text-white">{assets.length + spks.length + technicians.length} Objects</p>
                             </div>
                           </div>
@@ -503,7 +628,7 @@ const SettingsView: React.FC = () => {
                             </div>
                             <div>
                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Target SQL</p>
-                               <p className="text-sm font-black text-white">Live Node</p>
+                               <p className="text-sm font-black text-white">Production Node</p>
                             </div>
                           </div>
                        </div>
@@ -516,7 +641,7 @@ const SettingsView: React.FC = () => {
                             'bg-white text-slate-900 hover:bg-slate-100 shadow-indigo-500/10'}`}
                        >
                          {isMigrating ? <Loader2 className="w-5 h-5 animate-spin" /> : <DatabaseZap className="w-5 h-5" />}
-                         {isMigrating ? 'Synchronizing...' : 'Migrate to Production'}
+                         {isMigrating ? 'Transferring...' : 'Execute Migration'}
                        </button>
                     </div>
 
@@ -532,7 +657,7 @@ const SettingsView: React.FC = () => {
                       </div>
                     )}
             </div>
-
+            
             <style>{`
                 @keyframes progress {
                    0% { width: 0%; margin-left: 0; }
@@ -549,25 +674,25 @@ const SettingsView: React.FC = () => {
 
   return (
     <div className="max-w-6xl mx-auto pb-32">
-      <div className="flex items-center justify-between mb-12">
+      <div className="flex items-center justify-between mb-12 no-print">
         <div className="flex items-center gap-6">
           <div className="w-16 h-16 bg-slate-900 rounded-[24px] flex items-center justify-center text-blue-500 shadow-xl border border-white/5">
             <SettingsIcon className="w-8 h-8" />
           </div>
           <div>
             <h2 className="text-4xl font-black text-white tracking-tighter uppercase text-glow-blue">System <span className="text-blue-500">Architecture</span></h2>
-            <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mt-1">Configure global operational & persistence parameters</p>
+            <p className="text-slate-500 font-bold uppercase tracking-widest text-xs mt-1">Global persistence & infrastructure configuration</p>
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-        <div className="lg:col-span-3 space-y-2">
+        <div className="lg:col-span-3 space-y-2 no-print">
           {[
-            { id: 'system', icon: Database, label: 'Asset Core' },
+            { id: 'system', icon: Database, label: 'Asset Matrix' },
             { id: 'appearance', icon: Monitor, label: 'Interface' },
-            { id: 'infrastructure', icon: Server, label: 'Persistence' },
-            { id: 'governance', icon: ShieldCheck, label: 'Data Security' },
+            { id: 'infrastructure', icon: Server, label: 'Infrastructure' },
+            { id: 'governance', icon: ShieldCheck, label: 'Security' },
           ].map(item => (
             <button
               key={item.id}
@@ -588,17 +713,17 @@ const SettingsView: React.FC = () => {
         </div>
       </div>
 
-      {/* FIXED SAVE BUTTON (Floating Bar) */}
+      {/* Floating Save Prompt */}
       {(hasUnsavedChanges || isSaving) && (
         <div className="fixed bottom-10 right-10 left-[300px] flex justify-center z-[60] animate-in slide-in-from-bottom-10 duration-500 no-print">
           <div className="glass-card px-10 py-5 rounded-[40px] border-blue-500/30 flex items-center gap-12 shadow-2xl shadow-blue-500/20">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-500">
+              <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-500">
                 <CloudUpload className="w-6 h-6" />
               </div>
               <div>
                 <p className="text-sm font-black text-white uppercase tracking-tight">Persistence Pending</p>
-                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Commit changes to permanent storage</p>
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Commit changes to the primary node</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -614,22 +739,21 @@ const SettingsView: React.FC = () => {
                 className="bg-blue-600 hover:bg-blue-500 text-white px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-blue-500/40 flex items-center gap-3 transition-all active:scale-95 disabled:opacity-50"
               >
                 {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                {isSaving ? 'Synchronizing...' : 'Commit Changes'}
+                {isSaving ? 'Synchronizing...' : 'Commit Protocol'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Success Notification */}
       {showSuccess && (
         <div className="fixed top-10 right-10 z-[100] glass-card px-6 py-4 rounded-2xl border-emerald-500/30 flex items-center gap-4 animate-in slide-in-from-right-10">
           <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white">
             <Check className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-sm font-black text-white uppercase">Ledger Sync Complete</p>
-            <p className="text-[10px] text-slate-500 font-bold uppercase">All activities archived to primary node</p>
+            <p className="text-sm font-black text-white uppercase">Ledger Sync Success</p>
+            <p className="text-[10px] text-slate-500 font-bold uppercase">Infrastructure parameters verified</p>
           </div>
         </div>
       )}

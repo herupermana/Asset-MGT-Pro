@@ -63,3 +63,12 @@ export interface RedisConfig {
   tls: boolean;
   enabled: boolean;
 }
+
+export interface MySQLConfig {
+  host: string;
+  port: number;
+  database: string;
+  user: string;
+  password?: string;
+  ssl: boolean;
+}

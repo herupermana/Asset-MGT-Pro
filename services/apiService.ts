@@ -1,5 +1,5 @@
 
-import { Asset, SPK, Technician, RedisConfig } from '../types';
+import { Asset, SPK, Technician, RedisConfig, MySQLConfig } from '../types';
 
 export type StorageMode = 'local' | 'sql_remote';
 
@@ -43,7 +43,7 @@ class ApiService {
     
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second max wait for stats
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
 
       const response = await fetch(`${this.apiBaseUrl}/stats`, { signal: controller.signal });
       clearTimeout(timeoutId);
@@ -51,8 +51,28 @@ class ApiService {
       if (!response.ok) return null;
       return response.json();
     } catch (e) {
-      // Gracefully return null instead of throwing to prevent console errors in UI loops
+      // Return null instead of throwing to prevent blocking errors in UI
       return null;
+    }
+  }
+
+  // --- PERSISTENCE TESTS ---
+  async testMySQLConnection(config: MySQLConfig): Promise<boolean> {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      
+      const response = await fetch(`${this.apiBaseUrl}/mysql/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      return response.ok;
+    } catch (e) {
+      return false;
     }
   }
 

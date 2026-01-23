@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { Asset, SPK, Technician, AssetStatus, SPKStatus, RedisConfig } from './types';
+import { Asset, SPK, Technician, AssetStatus, SPKStatus, RedisConfig, MySQLConfig } from './types';
 import { MOCK_ASSETS, MOCK_SPKS, MOCK_TECHNICIANS, DEFAULT_CATEGORIES, DEFAULT_LOCATIONS } from './constants';
 import { gemini } from './services/geminiService';
 import { api, StorageMode } from './services/apiService';
@@ -23,9 +23,11 @@ interface AppContextType {
   storageMode: StorageMode;
   isDbConnected: boolean;
   redisConfig: RedisConfig;
+  mysqlConfig: MySQLConfig;
   setStorageMode: (mode: StorageMode) => void;
   setDbEndpoint: (url: string) => void;
   setRedisConfig: (config: RedisConfig) => void;
+  setMysqlConfig: (config: MySQLConfig) => void;
   setTheme: (theme: Theme) => void;
   setLanguage: (lang: Language) => void;
   setAutoTranslate: (enabled: boolean) => void;
@@ -130,6 +132,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return saved ? JSON.parse(saved) : { host: '127.0.0.1', port: 6379, tls: false, enabled: false };
   });
 
+  const [mysqlConfig, setMysqlConfigState] = useState<MySQLConfig>(() => {
+    const saved = localStorage.getItem('ap_mysql_config');
+    return saved ? JSON.parse(saved) : { host: 'localhost', port: 3306, database: 'assetpro', user: 'admin', ssl: false };
+  });
+
   // Initial Data Fetch with Seed Protection
   useEffect(() => {
     const loadData = async () => {
@@ -139,7 +146,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const hasSeededBefore = localStorage.getItem('ap_system_seeded') === 'true';
         
         if (api.getMode() === 'local' && a.length === 0 && !hasSeededBefore) {
-          // One-time demo seed
           setAssets(MOCK_ASSETS);
           setSpks(MOCK_SPKS);
           setTechnicians(MOCK_TECHNICIANS);
@@ -200,6 +206,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     localStorage.setItem('ap_redis_config', JSON.stringify(config));
   };
 
+  const setMysqlConfig = (config: MySQLConfig) => {
+    setMysqlConfigState(config);
+    localStorage.setItem('ap_mysql_config', JSON.stringify(config));
+  };
+
   const handleFullLedgerTranslation = async (targetLang: Language) => {
     const langName = targetLang === 'id' ? 'Indonesian' : 'English';
     const translatedSpks = await Promise.all(spks.map(async (s) => {
@@ -220,7 +231,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setAssets(translatedAssets);
   };
 
-  // Explicit persistence for all activities
   const addAsset = (asset: Asset) => {
     setAssets(prev => [asset, ...prev]);
     api.createAsset(asset);
@@ -284,7 +294,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     api.updateSPK(updatedSpk);
 
     if (originalSpk && originalSpk.technicianId !== updatedSpk.technicianId) {
-       // Handover logic
        const oldTech = technicians.find(t => t.id === originalSpk.technicianId);
        const newTech = technicians.find(t => t.id === updatedSpk.technicianId);
        
@@ -330,7 +339,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
          setTechnicians(p => p.map(t => t.id === uTech.id ? uTech : t));
        }
        
-       // Update Asset Record: Set status to Operational and update lastMaintenance date
        const targetAsset = assets.find(a => a.id === spk.assetId);
        if (targetAsset) {
          updateAsset({ 
@@ -355,7 +363,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (data.assets) setAssets(data.assets);
     if (data.spks) setSpks(data.spks);
     if (data.technicians) setTechnicians(data.technicians);
-    // Persist bulk restore
     localStorage.setItem('ap_assets', JSON.stringify(data.assets));
     localStorage.setItem('ap_spks', JSON.stringify(data.spks));
     localStorage.setItem('ap_technicians', JSON.stringify(data.technicians));
@@ -392,7 +399,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const addTechnician = (tech: Technician) => {
     setTechnicians(prev => [tech, ...prev]);
-    // Note: api service would ideally have createTechnician too
     localStorage.setItem('ap_technicians', JSON.stringify([tech, ...technicians]));
   };
 
@@ -413,8 +419,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   return (
     <AppContext.Provider value={{ 
       assets, spks, technicians, categories, locations, globalSearchQuery, currentTechnician, isAdminLoggedIn, 
-      theme, language, isAutoTranslateEnabled, storageMode, isDbConnected, redisConfig,
-      setTheme, setLanguage, setAutoTranslate, setStorageMode, setDbEndpoint, setRedisConfig, setGlobalSearchQuery, addAsset, updateAsset, deleteAsset, 
+      theme, language, isAutoTranslateEnabled, storageMode, isDbConnected, redisConfig, mysqlConfig,
+      setTheme, setLanguage, setAutoTranslate, setStorageMode, setDbEndpoint, setRedisConfig, setMysqlConfig, setGlobalSearchQuery, addAsset, updateAsset, deleteAsset, 
       addCategory, removeCategory, addLocation, removeLocation, createSPK, updateSPK, reassignSPK, updateSPKStatus, updateAssetStatus,
       loginTechnician, loginAdmin, logout, logoutAdmin, addTechnician, deleteTechnician, updateTechnicianRank, bulkRestoreData, t
     }}>
