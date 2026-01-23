@@ -19,7 +19,7 @@ export interface Asset {
   category: string;
   location: string;
   purchaseDate: string;
-  arrivedDate: string; // New field
+  arrivedDate: string;
   status: AssetStatus;
   imageUrl: string;
   lastMaintenance: string;
@@ -31,8 +31,8 @@ export interface Technician {
   specialty: string;
   activeTasks: number;
   password?: string;
-  rank?: string; // New field for badge rank
-  averageRating?: number; // New field for satisfaction metrics
+  rank?: string;
+  averageRating?: number;
 }
 
 export interface SPK {
@@ -47,11 +47,19 @@ export interface SPK {
   dueDate: string;
   completedAt?: string;
   completionNote?: string;
-  evidence?: string[]; // New field for photo evidence
+  evidence?: string[];
 }
 
 export interface ConversationMessage {
   role: 'user' | 'assistant';
   text: string;
   timestamp: Date;
+}
+
+export interface RedisConfig {
+  host: string;
+  port: number;
+  password?: string;
+  tls: boolean;
+  enabled: boolean;
 }

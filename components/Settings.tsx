@@ -10,7 +10,8 @@ import {
   Smartphone, Monitor, RefreshCw, X, Check,
   History, Loader2, Languages, Sparkles, Server, Network, 
   Activity, CloudUpload, ShieldCheck, DatabaseZap, Terminal,
-  ArrowRight, HardHat, Box, ClipboardList, AlertCircle, Cpu
+  ArrowRight, HardHat, Box, ClipboardList, AlertCircle, Cpu,
+  Lock, Zap, ToggleLeft, ToggleRight
 } from 'lucide-react';
 
 const SettingsView: React.FC = () => {
@@ -20,7 +21,8 @@ const SettingsView: React.FC = () => {
     locations, addLocation, removeLocation,
     theme, setTheme, language, setLanguage,
     isAutoTranslateEnabled, setAutoTranslate,
-    storageMode, setStorageMode, setDbEndpoint, isDbConnected
+    storageMode, setStorageMode, setDbEndpoint, isDbConnected,
+    redisConfig, setRedisConfig
   } = useApp();
 
   const [activeSection, setActiveSection] = useState<'system' | 'appearance' | 'infrastructure' | 'governance'>('system');
@@ -32,6 +34,10 @@ const SettingsView: React.FC = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [testResult, setTestResult] = useState<'none' | 'success' | 'fail' | 'testing'>('none');
   
+  // Redis Local State
+  const [localRedis, setLocalRedis] = useState(redisConfig);
+  const [redisTestStatus, setRedisTestStatus] = useState<'none' | 'success' | 'fail' | 'testing'>('none');
+
   // Migration State
   const [isMigrating, setIsMigrating] = useState(false);
   const [migrationStatus, setMigrationStatus] = useState('');
@@ -40,15 +46,18 @@ const SettingsView: React.FC = () => {
   useEffect(() => {
     if (storageMode === 'sql_remote' && isDbConnected) {
       fetchRemoteStats();
+    } else {
+      setRemoteStats(null);
     }
   }, [storageMode, isDbConnected]);
 
   const fetchRemoteStats = async () => {
-    try {
-      const stats = await api.fetchDbStats();
+    // Resilience: api.fetchDbStats now returns null instead of throwing on network fail
+    const stats = await api.fetchDbStats();
+    if (stats) {
       setRemoteStats(stats);
-    } catch (e) {
-      console.error("Failed to fetch remote stats");
+    } else {
+      setRemoteStats(null);
     }
   };
 
@@ -56,6 +65,7 @@ const SettingsView: React.FC = () => {
     setIsSaving(true);
     setTimeout(() => {
       setDbEndpoint(dbUrl);
+      setRedisConfig(localRedis);
       setIsSaving(false);
       setHasUnsavedChanges(false);
       setShowSuccess(true);
@@ -66,16 +76,21 @@ const SettingsView: React.FC = () => {
   const testConnection = async () => {
     setTestResult('testing');
     try {
-      // Temporarily set endpoint for the test
       const oldUrl = api.getEndpoint();
       api.setEndpoint(dbUrl);
       const ok = await api.checkConnection();
       setTestResult(ok ? 'success' : 'fail');
-      // Revert if failed or keep for save? For test we revert until committed.
       api.setEndpoint(oldUrl);
     } catch (e) {
       setTestResult('fail');
     }
+  };
+
+  const testRedis = async () => {
+    setRedisTestStatus('testing');
+    const ok = await api.testRedisConnection(localRedis);
+    setRedisTestStatus(ok ? 'success' : 'fail');
+    setTimeout(() => setRedisTestStatus('none'), 4000);
   };
 
   const startMigration = async () => {
@@ -101,10 +116,12 @@ const SettingsView: React.FC = () => {
   };
 
   useEffect(() => {
-    if (dbUrl !== api.getEndpoint()) {
+    if (dbUrl !== api.getEndpoint() || JSON.stringify(localRedis) !== JSON.stringify(redisConfig)) {
       setHasUnsavedChanges(true);
+    } else {
+      setHasUnsavedChanges(false);
     }
-  }, [dbUrl]);
+  }, [dbUrl, localRedis, redisConfig]);
 
   const renderSectionContent = () => {
     switch (activeSection) {
@@ -132,7 +149,7 @@ const SettingsView: React.FC = () => {
                     onChange={e => setNewCatName(e.target.value)}
                   />
                   <button 
-                    onClick={() => { if(newCatName.trim()){ addCategory(newCatName.trim()); setNewCatName(''); setHasUnsavedChanges(true); } }}
+                    onClick={() => { if(newCatName.trim()){ addCategory(newCatName.trim()); setNewCatName(''); } }}
                     className="px-6 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-blue-500/20 transition-all active:scale-95"
                   >
                     Add
@@ -143,7 +160,7 @@ const SettingsView: React.FC = () => {
                   {categories.map(cat => (
                     <div key={cat} className="group flex items-center gap-3 px-4 py-2 bg-white/5 border border-white/5 rounded-xl hover:border-blue-500/30 transition-all">
                       <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{cat}</span>
-                      <button onClick={() => { removeCategory(cat); setHasUnsavedChanges(true); }} className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-rose-500 transition-all">
+                      <button onClick={() => { removeCategory(cat); }} className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-rose-500 transition-all">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -173,7 +190,7 @@ const SettingsView: React.FC = () => {
                     onChange={e => setNewLocName(e.target.value)}
                   />
                   <button 
-                    onClick={() => { if(newLocName.trim()){ addLocation(newLocName.trim()); setNewLocName(''); setHasUnsavedChanges(true); } }}
+                    onClick={() => { if(newLocName.trim()){ addLocation(newLocName.trim()); setNewLocName(''); } }}
                     className="px-6 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
                   >
                     Add
@@ -184,7 +201,7 @@ const SettingsView: React.FC = () => {
                   {locations.map(loc => (
                     <div key={loc} className="group flex items-center gap-3 px-4 py-2 bg-white/5 border border-white/5 rounded-xl hover:border-emerald-500/30 transition-all">
                       <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{loc}</span>
-                      <button onClick={() => { removeLocation(loc); setHasUnsavedChanges(true); }} className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-rose-500 transition-all">
+                      <button onClick={() => { removeLocation(loc); }} className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-rose-500 transition-all">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -199,7 +216,7 @@ const SettingsView: React.FC = () => {
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="grid grid-cols-2 gap-6">
               <button 
-                onClick={() => { setTheme('light'); setHasUnsavedChanges(true); }}
+                onClick={() => { setTheme('light'); }}
                 className={`p-10 rounded-[40px] border-2 text-left transition-all space-y-4 ${theme === 'light' ? 'bg-white border-blue-600 text-slate-900' : 'bg-white/5 border-transparent text-slate-500 hover:bg-white/10'}`}
               >
                 <Sun className={`w-8 h-8 ${theme === 'light' ? 'text-blue-600' : 'text-slate-600'}`} />
@@ -209,7 +226,7 @@ const SettingsView: React.FC = () => {
                 </div>
               </button>
               <button 
-                onClick={() => { setTheme('dark'); setHasUnsavedChanges(true); }}
+                onClick={() => { setTheme('dark'); }}
                 className={`p-10 rounded-[40px] border-2 text-left transition-all space-y-4 ${theme === 'dark' ? 'bg-slate-900 border-blue-600 text-white' : 'bg-white/5 border-transparent text-slate-500 hover:bg-white/10'}`}
               >
                 <Moon className={`w-8 h-8 ${theme === 'dark' ? 'text-blue-400' : 'text-slate-600'}`} />
@@ -229,7 +246,7 @@ const SettingsView: React.FC = () => {
                 {['en', 'id'].map(l => (
                   <button 
                     key={l}
-                    onClick={() => { setLanguage(l as any); setHasUnsavedChanges(true); }}
+                    onClick={() => { setLanguage(l as any); }}
                     className={`p-5 rounded-2xl border-2 font-black text-xs uppercase tracking-widest transition-all ${language === l ? 'bg-blue-600/10 border-blue-600 text-white' : 'bg-white/5 border-transparent text-slate-500 hover:bg-white/10'}`}
                   >
                     {l === 'en' ? 'English - Global' : 'Bahasa Indonesia'}
@@ -248,7 +265,7 @@ const SettingsView: React.FC = () => {
                   </div>
                 </div>
                 <button 
-                  onClick={() => { setAutoTranslate(!isAutoTranslateEnabled); setHasUnsavedChanges(true); }}
+                  onClick={() => { setAutoTranslate(!isAutoTranslateEnabled); }}
                   className={`w-14 h-8 rounded-full relative transition-all ${isAutoTranslateEnabled ? 'bg-blue-600' : 'bg-slate-800'}`}
                 >
                   <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${isAutoTranslateEnabled ? 'right-1' : 'left-1'}`} />
@@ -272,7 +289,7 @@ const SettingsView: React.FC = () => {
 
             <div className="grid grid-cols-2 gap-6">
               <button 
-                onClick={() => { setStorageMode('local'); setHasUnsavedChanges(true); }}
+                onClick={() => { setStorageMode('local'); }}
                 className={`p-10 rounded-[40px] border-2 text-left transition-all space-y-4 ${storageMode === 'local' ? 'bg-blue-600/10 border-blue-600' : 'bg-white/5 border-transparent hover:bg-white/10'}`}
               >
                 <Smartphone className="w-10 h-10 text-blue-500" />
@@ -282,7 +299,7 @@ const SettingsView: React.FC = () => {
                 </div>
               </button>
               <button 
-                onClick={() => { setStorageMode('sql_remote'); setHasUnsavedChanges(true); }}
+                onClick={() => { setStorageMode('sql_remote'); }}
                 className={`p-10 rounded-[40px] border-2 text-left transition-all space-y-4 ${storageMode === 'sql_remote' ? 'bg-blue-600/10 border-blue-600' : 'bg-white/5 border-transparent hover:bg-white/10'}`}
               >
                 <Server className="w-10 h-10 text-indigo-500" />
@@ -293,6 +310,7 @@ const SettingsView: React.FC = () => {
               </button>
             </div>
 
+            {/* SQL DATABASE CONNECTOR */}
             <div className="glass-card p-10 rounded-[48px] border-white/5 space-y-10 animate-in zoom-in-95">
                 <div className="flex items-center justify-between">
                   <div>
@@ -352,8 +370,110 @@ const SettingsView: React.FC = () => {
                       </div>
                     </div>
                   )}
+                </div>
+            </div>
 
-                  <div className="p-10 bg-slate-900 border border-white/5 rounded-[40px] space-y-8 relative overflow-hidden">
+            {/* REDIS ACCELERATOR SECTION */}
+            <div className="glass-card p-10 rounded-[48px] border-white/5 space-y-8">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-rose-500/10 rounded-2xl flex items-center justify-center text-rose-500">
+                    <Zap className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-xl font-black text-white uppercase tracking-tight">Real-time Accelerator (Redis)</h4>
+                    <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">High-speed telemetry & session cache</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setLocalRedis({...localRedis, enabled: !localRedis.enabled})}
+                  className={`flex items-center gap-3 px-6 py-2.5 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all border ${localRedis.enabled ? 'bg-rose-600/10 border-rose-500/30 text-rose-400' : 'bg-white/5 border-white/5 text-slate-500'}`}
+                >
+                  {localRedis.enabled ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
+                  {localRedis.enabled ? 'Cache Active' : 'Cache Disabled'}
+                </button>
+              </div>
+
+              {localRedis.enabled && (
+                <div className="space-y-8 animate-in slide-in-from-top-2 duration-500">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 flex items-center gap-2">
+                        <Server className="w-3.5 h-3.5" />
+                        Redis Server Host
+                      </label>
+                      <input 
+                        className="w-full px-6 py-4 rounded-2xl outline-none text-white font-bold bg-white/5 border border-white/10"
+                        value={localRedis.host}
+                        onChange={e => setLocalRedis({...localRedis, host: e.target.value})}
+                        placeholder="127.0.0.1"
+                      />
+                    </div>
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 flex items-center gap-2">
+                        <Activity className="w-3.5 h-3.5" />
+                        Listen Port
+                      </label>
+                      <input 
+                        type="number"
+                        className="w-full px-6 py-4 rounded-2xl outline-none text-white font-bold bg-white/5 border border-white/10"
+                        value={localRedis.port}
+                        onChange={e => setLocalRedis({...localRedis, port: parseInt(e.target.value) || 6379})}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 flex items-center gap-2">
+                        <Lock className="w-3.5 h-3.5" />
+                        Auth Credentials
+                      </label>
+                      <input 
+                        type="password"
+                        className="w-full px-6 py-4 rounded-2xl outline-none text-white font-bold bg-white/5 border border-white/10"
+                        value={localRedis.password || ''}
+                        onChange={e => setLocalRedis({...localRedis, password: e.target.value})}
+                        placeholder="Redis password (optional)"
+                      />
+                    </div>
+                    <div className="flex items-end pb-1">
+                      <button 
+                        onClick={testRedis}
+                        disabled={redisTestStatus === 'testing'}
+                        className={`flex items-center gap-3 px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all border w-full justify-center
+                          ${redisTestStatus === 'success' ? 'bg-emerald-600 border-emerald-500 text-white shadow-emerald-500/20 shadow-lg' : 
+                            redisTestStatus === 'fail' ? 'bg-rose-600 border-rose-500 text-white shadow-rose-500/20 shadow-lg' : 
+                            'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}
+                      >
+                        {redisTestStatus === 'testing' ? <Loader2 className="w-4 h-4 animate-spin" /> : 
+                         redisTestStatus === 'success' ? <Check className="w-4 h-4" /> : 
+                         redisTestStatus === 'fail' ? <X className="w-4 h-4" /> : <RefreshCw className="w-4 h-4" />}
+                        {redisTestStatus === 'testing' ? 'Testing Ping...' : 
+                         redisTestStatus === 'success' ? 'Redis Reachable' : 
+                         redisTestStatus === 'fail' ? 'Redis Handshake Failed' : 'Test Node Connectivity'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between p-6 bg-rose-500/5 rounded-[24px] border border-rose-500/10">
+                    <div className="flex items-center gap-4">
+                      <ShieldCheck className="w-5 h-5 text-rose-400" />
+                      <p className="text-xs text-rose-200/60 font-medium">Use TLS/SSL for encrypted cross-regional cache synchronization.</p>
+                    </div>
+                    <button 
+                      onClick={() => setLocalRedis({...localRedis, tls: !localRedis.tls})}
+                      className={`w-12 h-6 rounded-full relative transition-all ${localRedis.tls ? 'bg-rose-600' : 'bg-slate-800'}`}
+                    >
+                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${localRedis.tls ? 'right-1' : 'left-1'}`} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* PRODUCTION MIGRATION ZONE */}
+            <div className="p-10 bg-slate-900 border border-white/5 rounded-[40px] space-y-8 relative overflow-hidden">
                     <div className="absolute top-0 right-0 p-10 opacity-5">
                        <CloudUpload className="w-32 h-32" />
                     </div>
@@ -411,17 +531,15 @@ const SettingsView: React.FC = () => {
                         </p>
                       </div>
                     )}
-                  </div>
-                </div>
-              </div>
+            </div>
 
-              <style>{`
+            <style>{`
                 @keyframes progress {
                    0% { width: 0%; margin-left: 0; }
                    50% { width: 40%; margin-left: 30%; }
                    100% { width: 0%; margin-left: 100%; }
                 }
-              `}</style>
+            `}</style>
           </div>
         );
       case 'governance':

@@ -1,5 +1,5 @@
 
-import { Asset, SPK, Technician } from '../types';
+import { Asset, SPK, Technician, RedisConfig } from '../types';
 
 export type StorageMode = 'local' | 'sql_remote';
 
@@ -33,16 +33,48 @@ class ApiService {
   }
 
   // --- TELEMETRY & STATS ---
-  async fetchDbStats(): Promise<DbStats> {
+  async fetchDbStats(): Promise<DbStats | null> {
     if (this.mode === 'local') {
       const a = JSON.parse(localStorage.getItem('ap_assets') || '[]');
       const s = JSON.parse(localStorage.getItem('ap_spks') || '[]');
       const t = JSON.parse(localStorage.getItem('ap_technicians') || '[]');
       return { assetCount: a.length, spkCount: s.length, techCount: t.length, lastSync: 'Local only' };
     }
-    const response = await fetch(`${this.apiBaseUrl}/stats`);
-    if (!response.ok) throw new Error('Could not retrieve remote stats');
-    return response.json();
+    
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second max wait for stats
+
+      const response = await fetch(`${this.apiBaseUrl}/stats`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) return null;
+      return response.json();
+    } catch (e) {
+      // Gracefully return null instead of throwing to prevent console errors in UI loops
+      return null;
+    }
+  }
+
+  // --- REDIS ACCELERATOR ---
+  async testRedisConnection(config: RedisConfig): Promise<boolean> {
+    if (!config.enabled) return false;
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      
+      const response = await fetch(`${this.apiBaseUrl}/redis/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      return response.ok;
+    } catch (e) {
+      return false;
+    }
   }
 
   // --- MIGRATION ENGINE ---

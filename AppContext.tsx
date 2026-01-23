@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { Asset, SPK, Technician, AssetStatus, SPKStatus } from './types';
+import { Asset, SPK, Technician, AssetStatus, SPKStatus, RedisConfig } from './types';
 import { MOCK_ASSETS, MOCK_SPKS, MOCK_TECHNICIANS, DEFAULT_CATEGORIES, DEFAULT_LOCATIONS } from './constants';
 import { gemini } from './services/geminiService';
 import { api, StorageMode } from './services/apiService';
@@ -22,8 +22,10 @@ interface AppContextType {
   isAutoTranslateEnabled: boolean;
   storageMode: StorageMode;
   isDbConnected: boolean;
+  redisConfig: RedisConfig;
   setStorageMode: (mode: StorageMode) => void;
   setDbEndpoint: (url: string) => void;
+  setRedisConfig: (config: RedisConfig) => void;
   setTheme: (theme: Theme) => void;
   setLanguage: (lang: Language) => void;
   setAutoTranslate: (enabled: boolean) => void;
@@ -122,6 +124,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [isAutoTranslateEnabled, setAutoTranslateState] = useState(() => localStorage.getItem('ap_auto_translate') === 'true');
   const [storageMode, setStorageModeState] = useState<StorageMode>(api.getMode());
   const [isDbConnected, setIsDbConnected] = useState(true);
+  
+  const [redisConfig, setRedisConfigState] = useState<RedisConfig>(() => {
+    const saved = localStorage.getItem('ap_redis_config');
+    return saved ? JSON.parse(saved) : { host: '127.0.0.1', port: 6379, tls: false, enabled: false };
+  });
 
   // Initial Data Fetch with Seed Protection
   useEffect(() => {
@@ -186,6 +193,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const setDbEndpoint = (url: string) => {
     api.setEndpoint(url);
+  };
+
+  const setRedisConfig = (config: RedisConfig) => {
+    setRedisConfigState(config);
+    localStorage.setItem('ap_redis_config', JSON.stringify(config));
   };
 
   const handleFullLedgerTranslation = async (targetLang: Language) => {
@@ -401,8 +413,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   return (
     <AppContext.Provider value={{ 
       assets, spks, technicians, categories, locations, globalSearchQuery, currentTechnician, isAdminLoggedIn, 
-      theme, language, isAutoTranslateEnabled, storageMode, isDbConnected,
-      setTheme, setLanguage, setAutoTranslate, setStorageMode, setDbEndpoint, setGlobalSearchQuery, addAsset, updateAsset, deleteAsset, 
+      theme, language, isAutoTranslateEnabled, storageMode, isDbConnected, redisConfig,
+      setTheme, setLanguage, setAutoTranslate, setStorageMode, setDbEndpoint, setRedisConfig, setGlobalSearchQuery, addAsset, updateAsset, deleteAsset, 
       addCategory, removeCategory, addLocation, removeLocation, createSPK, updateSPK, reassignSPK, updateSPKStatus, updateAssetStatus,
       loginTechnician, loginAdmin, logout, logoutAdmin, addTechnician, deleteTechnician, updateTechnicianRank, bulkRestoreData, t
     }}>
