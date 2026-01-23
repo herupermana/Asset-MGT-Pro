@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../AppContext';
 import BackupRestore from './BackupRestore';
+import DatabaseModal from './DatabaseModal';
 import { api } from '../services/apiService';
 import { 
   Settings as SettingsIcon, User, Shield, 
@@ -11,7 +12,7 @@ import {
   History, Loader2, Languages, Sparkles, Server, Network, 
   Activity, CloudUpload, ShieldCheck, DatabaseZap, Terminal,
   ArrowRight, HardHat, Box, ClipboardList, AlertCircle, Cpu,
-  Lock, Zap, ToggleLeft, ToggleRight, Key, ShieldAlert
+  Lock, Zap, ToggleLeft, ToggleRight, Key, ShieldAlert, Settings2
 } from 'lucide-react';
 
 const SettingsView: React.FC = () => {
@@ -22,7 +23,7 @@ const SettingsView: React.FC = () => {
     theme, setTheme, language, setLanguage,
     isAutoTranslateEnabled, setAutoTranslate,
     storageMode, setStorageMode, setDbEndpoint, isDbConnected,
-    redisConfig, setRedisConfig, mysqlConfig, setMysqlConfig
+    redisConfig, setRedisConfig, mysqlConfig
   } = useApp();
 
   const [activeSection, setActiveSection] = useState<'system' | 'appearance' | 'infrastructure' | 'governance'>('system');
@@ -33,16 +34,11 @@ const SettingsView: React.FC = () => {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   
-  // Test results
+  const [isDbModalOpen, setIsDbModalOpen] = useState(false);
   const [testResult, setTestResult] = useState<'none' | 'success' | 'fail' | 'testing'>('none');
-  const [mysqlTestStatus, setMysqlTestStatus] = useState<'none' | 'success' | 'fail' | 'testing'>('none');
   const [redisTestStatus, setRedisTestStatus] = useState<'none' | 'success' | 'fail' | 'testing'>('none');
-  
-  // Local Config states
   const [localRedis, setLocalRedis] = useState(redisConfig);
-  const [localMysql, setLocalMysql] = useState(mysqlConfig);
 
-  // Migration State
   const [isMigrating, setIsMigrating] = useState(false);
   const [migrationStatus, setMigrationStatus] = useState('');
   const [remoteStats, setRemoteStats] = useState<any>(null);
@@ -73,7 +69,6 @@ const SettingsView: React.FC = () => {
     setTimeout(() => {
       setDbEndpoint(dbUrl);
       setRedisConfig(localRedis);
-      setMysqlConfig(localMysql);
       setIsSaving(false);
       setHasUnsavedChanges(false);
       setShowSuccess(true);
@@ -94,13 +89,6 @@ const SettingsView: React.FC = () => {
     }
   };
 
-  const testMysql = async () => {
-    setMysqlTestStatus('testing');
-    const ok = await api.testMySQLConnection(localMysql);
-    setMysqlTestStatus(ok ? 'success' : 'fail');
-    setTimeout(() => setMysqlTestStatus('none'), 4000);
-  };
-
   const testRedis = async () => {
     setRedisTestStatus('testing');
     const ok = await api.testRedisConnection(localRedis);
@@ -110,32 +98,27 @@ const SettingsView: React.FC = () => {
 
   const startMigration = async () => {
     if (!window.confirm("CRITICAL ACTION: This will overwrite remote data with your current local state. Continue?")) return;
-    
     setIsMigrating(true);
-    setMigrationStatus('Establishing secure handshake...');
-    
+    setMigrationStatus('Establishing handshake...');
     try {
-      await new Promise(r => setTimeout(r, 1000));
-      setMigrationStatus(`Serializing ${assets.length} Assets, ${spks.length} Orders, and ${technicians.length} Personnel...`);
       await api.migrateToRemote({ assets, spks, technicians });
-      setMigrationStatus('Migration successfully committed to production SQL.');
+      setMigrationStatus('Sync complete.');
       setTimeout(() => {
         setIsMigrating(false);
         setMigrationStatus('');
         fetchRemoteStats();
       }, 2000);
     } catch (e: any) {
-      setMigrationStatus(`PROTOCOL BREACH: ${e.message}`);
+      setMigrationStatus(`Error: ${e.message}`);
       setTimeout(() => setIsMigrating(false), 5000);
     }
   };
 
   useEffect(() => {
     const redisChanged = JSON.stringify(localRedis) !== JSON.stringify(redisConfig);
-    const mysqlChanged = JSON.stringify(localMysql) !== JSON.stringify(mysqlConfig);
     const bridgeChanged = dbUrl !== api.getEndpoint();
-    setHasUnsavedChanges(redisChanged || mysqlChanged || bridgeChanged);
-  }, [dbUrl, localRedis, redisConfig, localMysql, mysqlConfig]);
+    setHasUnsavedChanges(redisChanged || bridgeChanged);
+  }, [dbUrl, localRedis, redisConfig]);
 
   const renderSectionContent = () => {
     switch (activeSection) {
@@ -169,7 +152,6 @@ const SettingsView: React.FC = () => {
                     Add
                   </button>
                 </div>
-                
                 <div className="flex flex-wrap gap-2">
                   {categories.map(cat => (
                     <div key={cat} className="group flex items-center gap-3 px-4 py-2 bg-white/5 border border-white/5 rounded-xl hover:border-blue-500/30 transition-all">
@@ -210,7 +192,6 @@ const SettingsView: React.FC = () => {
                     Add
                   </button>
                 </div>
-                
                 <div className="flex flex-wrap gap-2">
                   {locations.map(loc => (
                     <div key={loc} className="group flex items-center gap-3 px-4 py-2 bg-white/5 border border-white/5 rounded-xl hover:border-emerald-500/30 transition-all">
@@ -267,7 +248,6 @@ const SettingsView: React.FC = () => {
                   </button>
                 ))}
               </div>
-              
               <div className="flex items-center justify-between p-6 bg-white/5 rounded-3xl border border-white/5">
                 <div className="flex items-center gap-4">
                   <div className={`p-3 rounded-xl ${isAutoTranslateEnabled ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 text-slate-600'}`}>
@@ -301,7 +281,7 @@ const SettingsView: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <button 
                 onClick={() => setStorageMode('local')}
                 className={`p-10 rounded-[40px] border-2 text-left transition-all space-y-4 ${storageMode === 'local' ? 'bg-blue-600/10 border-blue-600' : 'bg-white/5 border-transparent hover:bg-white/10'}`}
@@ -324,6 +304,58 @@ const SettingsView: React.FC = () => {
               </button>
             </div>
 
+            {/* PERSISTENCE NODE MONITOR */}
+            <div className="glass-card p-10 rounded-[48px] border-white/5 space-y-8 overflow-hidden relative">
+              <div className="flex items-center justify-between relative z-10">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center text-slate-400">
+                    <Database className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-xl font-black text-white uppercase tracking-tight">MySQL Infrastructure Node</h4>
+                    <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mt-1">Production Persistence Settings</p>
+                  </div>
+                </div>
+                <div className={`px-4 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border ${isDbConnected ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-rose-500/10 text-rose-500 border-rose-500/20'}`}>
+                  <Activity className={`w-3.5 h-3.5 ${isDbConnected ? 'animate-pulse' : ''}`} />
+                  {isDbConnected ? 'Active Connection' : 'Node Disconnected'}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
+                <div className="p-8 bg-white/5 rounded-[32px] border border-white/5 space-y-6">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Linked Host</p>
+                    <span className="text-xs font-bold text-white bg-white/10 px-3 py-1 rounded-lg">{mysqlConfig.host || 'Not Configured'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Active Instance</p>
+                    <span className="text-xs font-bold text-white bg-white/10 px-3 py-1 rounded-lg">{mysqlConfig.database || 'None'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Connect User</p>
+                    <div className="flex items-center gap-2">
+                       <User className="w-3 h-3 text-slate-600" />
+                       <span className="text-xs font-bold text-white">{mysqlConfig.user || 'N/A'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col justify-center gap-4">
+                  <button 
+                    onClick={() => setIsDbModalOpen(true)}
+                    className="w-full py-5 bg-blue-600 text-white font-black rounded-3xl hover:bg-blue-500 shadow-xl shadow-blue-500/20 transition-all active:scale-95 flex items-center justify-center gap-3 text-xs uppercase tracking-widest"
+                  >
+                    <Settings2 className="w-5 h-5" />
+                    Configure SQL Node
+                  </button>
+                  <p className="text-center text-[10px] text-slate-500 font-medium px-8 leading-relaxed">
+                    Update credentials, host endpoints, and secure tunnel parameters for the enterprise data node.
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* API BRIDGE SETTINGS */}
             <div className="glass-card p-10 rounded-[48px] border-white/5 space-y-10">
               <div className="flex items-center justify-between">
@@ -337,7 +369,7 @@ const SettingsView: React.FC = () => {
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Central Server Endpoint</label>
                 <div className="flex gap-4">
                   <input 
-                    className="flex-1 px-8 py-5 rounded-[24px] outline-none text-white font-black bg-white/5 border border-white/10 focus:ring-[12px] focus:ring-blue-500/10 text-lg"
+                    className="flex-1 px-8 py-5 rounded-[24px] outline-none text-white font-black bg-white/5 border border-white/10 focus:ring-[12px] focus:ring-blue-500/10 text-lg placeholder:text-slate-800"
                     value={dbUrl}
                     onChange={(e) => setDbUrl(e.target.value)}
                     placeholder="http://localhost:3000/api"
@@ -357,145 +389,6 @@ const SettingsView: React.FC = () => {
                   </button>
                 </div>
               </div>
-            </div>
-
-            {/* MYSQL CONFIGURATION */}
-            <div className="glass-card p-10 rounded-[48px] border-white/5 space-y-10">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-500">
-                  <Database className="w-6 h-6" />
-                </div>
-                <div>
-                  <h4 className="text-xl font-black text-white uppercase tracking-tight">Enterprise MySQL Ledger</h4>
-                  <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">Dedicated DB Configuration</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Database Host</label>
-                  <input 
-                    className="w-full px-6 py-4 rounded-2xl outline-none text-white font-bold bg-white/5 border border-white/10"
-                    value={localMysql.host}
-                    onChange={e => setLocalMysql({...localMysql, host: e.target.value})}
-                    placeholder="localhost"
-                  />
-                </div>
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Listen Port</label>
-                  <input 
-                    type="number"
-                    className="w-full px-6 py-4 rounded-2xl outline-none text-white font-bold bg-white/5 border border-white/10"
-                    value={localMysql.port}
-                    onChange={e => setLocalMysql({...localMysql, port: parseInt(e.target.value) || 3306})}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Connect Username</label>
-                  <div className="relative">
-                    <User className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
-                    <input 
-                      className="w-full pl-12 pr-6 py-4 rounded-2xl outline-none text-white font-bold bg-white/5 border border-white/10"
-                      value={localMysql.user}
-                      onChange={e => setLocalMysql({...localMysql, user: e.target.value})}
-                      placeholder="db_admin"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Auth Password</label>
-                  <div className="relative">
-                    <Key className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
-                    <input 
-                      type="password"
-                      className="w-full pl-12 pr-6 py-4 rounded-2xl outline-none text-white font-bold bg-white/5 border border-white/10"
-                      value={localMysql.password || ''}
-                      onChange={e => setLocalMysql({...localMysql, password: e.target.value})}
-                      placeholder="••••••••"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Instance / Database Name</label>
-                  <input 
-                    className="w-full px-6 py-4 rounded-2xl outline-none text-white font-bold bg-white/5 border border-white/10"
-                    value={localMysql.database}
-                    onChange={e => setLocalMysql({...localMysql, database: e.target.value})}
-                    placeholder="asset_pro_db"
-                  />
-                </div>
-                <div className="flex items-end pb-1">
-                  <button 
-                    onClick={testMysql}
-                    disabled={mysqlTestStatus === 'testing'}
-                    className={`flex items-center gap-3 px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all border w-full justify-center
-                      ${mysqlTestStatus === 'success' ? 'bg-emerald-600 border-emerald-500 text-white' : 
-                        mysqlTestStatus === 'fail' ? 'bg-rose-600 border-rose-500 text-white' : 
-                        'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}
-                  >
-                    {mysqlTestStatus === 'testing' ? <Loader2 className="w-4 h-4 animate-spin" /> : 
-                     mysqlTestStatus === 'success' ? <Check className="w-4 h-4" /> : 
-                     mysqlTestStatus === 'fail' ? <X className="w-4 h-4" /> : <RefreshCw className="w-4 h-4" />}
-                    {mysqlTestStatus === 'testing' ? 'Handshaking...' : 
-                     mysqlTestStatus === 'success' ? 'Database Linked' : 
-                     mysqlTestStatus === 'fail' ? 'Link Failed' : 'Test SQL Link'}
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between p-6 bg-white/5 rounded-[24px] border border-white/5">
-                <div className="flex items-center gap-4">
-                  <ShieldCheck className="w-5 h-5 text-blue-400" />
-                  <p className="text-xs text-slate-400 font-medium">Require SSL/TLS encrypted tunnel for database communication.</p>
-                </div>
-                <button 
-                  onClick={() => setLocalMysql({...localMysql, ssl: !localMysql.ssl})}
-                  className={`w-12 h-6 rounded-full relative transition-all ${localMysql.ssl ? 'bg-blue-600' : 'bg-slate-800'}`}
-                >
-                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${localMysql.ssl ? 'right-1' : 'left-1'}`} />
-                </button>
-              </div>
-
-              {storageMode === 'sql_remote' && (
-                <div className="pt-8 border-t border-white/5">
-                   <div className="flex items-center justify-between mb-6">
-                      <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Remote Node Telemetry</p>
-                      <button onClick={fetchRemoteStats} className="text-blue-500 hover:text-blue-400 transition-colors"><RefreshCw className="w-3.5 h-3.5" /></button>
-                   </div>
-                   
-                   {statsError ? (
-                     <div className="p-6 bg-rose-500/10 border border-rose-500/20 rounded-3xl flex items-center gap-4 text-rose-500">
-                        <AlertCircle className="w-5 h-5 shrink-0" />
-                        <p className="text-xs font-bold uppercase tracking-widest">Failed to fetch remote stats. Persistence node may be unreachable.</p>
-                     </div>
-                   ) : remoteStats ? (
-                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in slide-in-from-bottom-2">
-                        <div className="p-6 bg-white/5 border border-white/5 rounded-3xl text-center space-y-1">
-                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Remote Assets</p>
-                          <p className="text-3xl font-black text-white">{remoteStats.assetCount}</p>
-                        </div>
-                        <div className="p-6 bg-white/5 border border-white/5 rounded-3xl text-center space-y-1">
-                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Remote Orders</p>
-                          <p className="text-3xl font-black text-white">{remoteStats.spkCount}</p>
-                        </div>
-                        <div className="p-6 bg-white/5 border border-white/5 rounded-3xl text-center space-y-1">
-                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Personnel Nodes</p>
-                          <p className="text-3xl font-black text-white">{remoteStats.techCount}</p>
-                        </div>
-                      </div>
-                   ) : (
-                     <div className="h-24 flex items-center justify-center text-slate-700">
-                        <Loader2 className="w-6 h-6 animate-spin" />
-                     </div>
-                   )}
-                </div>
-              )}
             </div>
 
             {/* REDIS ACCELERATOR SECTION */}
@@ -523,22 +416,16 @@ const SettingsView: React.FC = () => {
                 <div className="space-y-8 animate-in slide-in-from-top-2 duration-500">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-3">
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 flex items-center gap-2">
-                        <Server className="w-3.5 h-3.5" />
-                        Redis Server Host
-                      </label>
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Redis Server Host</label>
                       <input 
-                        className="w-full px-6 py-4 rounded-2xl outline-none text-white font-bold bg-white/5 border border-white/10"
+                        className="w-full px-6 py-4 rounded-2xl outline-none text-white font-bold bg-white/5 border border-white/10 placeholder:text-slate-800"
                         value={localRedis.host}
                         onChange={e => setLocalRedis({...localRedis, host: e.target.value})}
                         placeholder="127.0.0.1"
                       />
                     </div>
                     <div className="space-y-3">
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 flex items-center gap-2">
-                        <Activity className="w-3.5 h-3.5" />
-                        Listen Port
-                      </label>
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Listen Port</label>
                       <input 
                         type="number"
                         className="w-full px-6 py-4 rounded-2xl outline-none text-white font-bold bg-white/5 border border-white/10"
@@ -550,13 +437,10 @@ const SettingsView: React.FC = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-3">
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 flex items-center gap-2">
-                        <Lock className="w-3.5 h-3.5" />
-                        Auth Credentials
-                      </label>
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Auth Credentials</label>
                       <input 
                         type="password"
-                        className="w-full px-6 py-4 rounded-2xl outline-none text-white font-bold bg-white/5 border border-white/10"
+                        className="w-full px-6 py-4 rounded-2xl outline-none text-white font-bold bg-white/5 border border-white/10 placeholder:text-slate-800"
                         value={localRedis.password || ''}
                         onChange={e => setLocalRedis({...localRedis, password: e.target.value})}
                         placeholder="Redis password (optional)"
@@ -579,19 +463,6 @@ const SettingsView: React.FC = () => {
                          redisTestStatus === 'fail' ? 'Redis Handshake Failed' : 'Test Node Connectivity'}
                       </button>
                     </div>
-                  </div>
-
-                  <div className="flex items-center justify-between p-6 bg-rose-500/5 rounded-[24px] border border-rose-500/10">
-                    <div className="flex items-center gap-4">
-                      <ShieldCheck className="w-5 h-5 text-rose-400" />
-                      <p className="text-xs text-rose-200/60 font-medium">Use TLS/SSL for encrypted cross-regional cache synchronization.</p>
-                    </div>
-                    <button 
-                      onClick={() => setLocalRedis({...localRedis, tls: !localRedis.tls})}
-                      className={`w-12 h-6 rounded-full relative transition-all ${localRedis.tls ? 'bg-rose-600' : 'bg-slate-800'}`}
-                    >
-                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${localRedis.tls ? 'right-1' : 'left-1'}`} />
-                    </button>
                   </div>
                 </div>
               )}
@@ -657,14 +528,6 @@ const SettingsView: React.FC = () => {
                       </div>
                     )}
             </div>
-            
-            <style>{`
-                @keyframes progress {
-                   0% { width: 0%; margin-left: 0; }
-                   50% { width: 40%; margin-left: 30%; }
-                   100% { width: 0%; margin-left: 100%; }
-                }
-            `}</style>
           </div>
         );
       case 'governance':
@@ -674,6 +537,8 @@ const SettingsView: React.FC = () => {
 
   return (
     <div className="max-w-6xl mx-auto pb-32">
+      <DatabaseModal isOpen={isDbModalOpen} onClose={() => setIsDbModalOpen(false)} />
+      
       <div className="flex items-center justify-between mb-12 no-print">
         <div className="flex items-center gap-6">
           <div className="w-16 h-16 bg-slate-900 rounded-[24px] flex items-center justify-center text-blue-500 shadow-xl border border-white/5">
@@ -718,7 +583,7 @@ const SettingsView: React.FC = () => {
         <div className="fixed bottom-10 right-10 left-[300px] flex justify-center z-[60] animate-in slide-in-from-bottom-10 duration-500 no-print">
           <div className="glass-card px-10 py-5 rounded-[40px] border-blue-500/30 flex items-center gap-12 shadow-2xl shadow-blue-500/20">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-500">
+              <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-500">
                 <CloudUpload className="w-6 h-6" />
               </div>
               <div>
